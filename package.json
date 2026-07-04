@@ -1,0 +1,26 @@
+{
+  "name": "ohs-portal",
+  "version": "1.0.0",
+  "description": "OHS Roster, Leave & Event Portal — Node.js + Vercel + Google Sheets",
+  "type": "module",
+  "scripts": {
+    "build:portal": "node scripts/build-portal.mjs",
+    "postinstall": "npm run build:portal",
+    "dev": "node scripts/dev-server.mjs",
+    "dev:vercel": "vercel dev",
+    "start": "node scripts/dev-server.mjs",
+    "health-check": "node scripts/health-check.mjs"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "googleapis": "^144.0.0",
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "vercel": "^39.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
