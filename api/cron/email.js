@@ -16,10 +16,22 @@ export default async function handler(req, res) {
     return;
   }
 
+  const result = {};
+  let hasError = false;
+
   try {
-    const result = await portal.runScheduledPortalEmail();
-    sendJson(res, 200, result);
+    result.digest = await portal.runScheduledPortalEmail();
   } catch (err) {
-    sendJson(res, 500, { error: err.message || "Cron failed" });
+    hasError = true;
+    result.digest = { sent: false, error: err.message || "Digest cron failed" };
   }
+
+  try {
+    result.overdueReminder = await portal.runOverdueReminderCheck();
+  } catch (err) {
+    hasError = true;
+    result.overdueReminder = { sent: false, error: err.message || "Overdue reminder cron failed" };
+  }
+
+  sendJson(res, hasError ? 500 : 200, result);
 }

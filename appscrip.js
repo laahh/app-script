@@ -171,8 +171,33 @@ const EMAIL_SCHEDULER_HEADERS = [
   "UpdatedAt",
   "UpdatedBy",
   "EventReminderDays",
-  "IncludePreviousDays"
+  "IncludePreviousDays",
+  "OverdueReminderLastKey",
+  "OverdueReminderLastRunAt",
+  "OverdueReminderLastCount"
 ];
+
+// Reminder H-3 sampai H-0 sebelum DueDate Project/Issue/Sub Task, dikirim
+// setiap hari jam OVERDUE_REMINDER_HOUR:OVERDUE_REMINDER_MINUTE ke daftar tetap ini.
+const OVERDUE_REMINDER_RECIPIENTS = [
+  "christine@beraucoal.co.id",
+  "paian.siregar@beraucoal.co.id",
+  "yadi.haryadi@beraucoal.co.id",
+  "oscar.whimmy@beraucoal.co.id",
+  "yudi@beraucoal.co.id",
+  "davi.tantra@beraucoalenergy.co.id",
+  "sepriyanto@beraucoal.co.id",
+  "dhehave@beraucoal.co.id",
+  "budiansyah@beraucoal.co.id",
+  "m.firmansyah@beraucoal.co.id",
+  "indra.nur@beraucoal.co.id",
+  "rahmantha.anggana@beraucoal.co.id",
+  "jimmi.idris@beraucoal.co.id"
+];
+
+const OVERDUE_REMINDER_WINDOW_DAYS = 3;
+const OVERDUE_REMINDER_HOUR = 8;
+const OVERDUE_REMINDER_MINUTE = 0;
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile("Index")
@@ -4360,6 +4385,243 @@ function runScheduledPortalEmail() {
   );
 }
 
+/* =========================================================
+ * OVERDUE REMINDER (Project & Issue Tracker)
+ * Mengirim email H-3 s/d H-0 sebelum DueDate ke daftar penerima tetap,
+ * setiap hari pukul OVERDUE_REMINDER_HOUR:OVERDUE_REMINDER_MINUTE,
+ * selama Project/Issue/Sub Task masih berstatus On Going.
+ * ========================================================= */
+
+function runOverdueReminderCheck() {
+  const settings = readEmailSchedulerSettings_();
+  const decision = getOverdueReminderDecision_(settings, new Date());
+
+  if (!decision.shouldSend) {
+    return {
+      sent: false,
+      message: decision.message,
+      scheduleKey: decision.scheduleKey || ""
+    };
+  }
+
+  return executeOverdueReminderDigest_(settings, decision.scheduleKey, "Scheduled run");
+}
+
+function sendOverdueReminderNow() {
+  const settings = readEmailSchedulerSettings_();
+  const scheduleKey = formatISO_(startOfDay_(new Date()));
+
+  return executeOverdueReminderDigest_(settings, scheduleKey, "Manual run");
+}
+
+function executeOverdueReminderDigest_(settings, scheduleKey, sourceLabel) {
+  const startedAt = new Date();
+
+  try {
+    const items = getDueSoonTrackerItems_(OVERDUE_REMINDER_WINDOW_DAYS);
+    const digest = buildOverdueReminderEmail_(items);
+
+    if (items.length) {
+      MailApp.sendEmail({
+        to: OVERDUE_REMINDER_RECIPIENTS.join(","),
+        subject: digest.subject,
+        htmlBody: digest.htmlBody,
+        body: digest.plainBody,
+        name: "OHS Portal Scheduler"
+      });
+    }
+
+    const updatedSettings = Object.assign({}, settings, {
+      OverdueReminderLastKey: scheduleKey || settings.OverdueReminderLastKey || "",
+      OverdueReminderLastRunAt: startedAt,
+      OverdueReminderLastCount: items.length
+    });
+
+    writeEmailSchedulerSettings_(updatedSettings);
+
+    return {
+      sent: items.length > 0,
+      itemCount: items.length,
+      subject: digest.subject,
+      recipients: OVERDUE_REMINDER_RECIPIENTS.join(","),
+      runAt: normalizeDateTimeCell_(startedAt),
+      source: sourceLabel
+    };
+  } catch (error) {
+    const failedSettings = Object.assign({}, settings, {
+      OverdueReminderLastRunAt: startedAt,
+      OverdueReminderLastCount: 0
+    });
+
+    writeEmailSchedulerSettings_(failedSettings);
+    throw error;
+  }
+}
+
+function getOverdueReminderDecision_(settings, now) {
+  const current = now || new Date();
+  const scheduleKey = formatISO_(startOfDay_(current));
+  const currentMinutes = current.getHours() * 60 + current.getMinutes();
+  const targetMinutes = OVERDUE_REMINDER_HOUR * 60 + OVERDUE_REMINDER_MINUTE;
+
+  // Window 75 menit mengantisipasi trigger yang berjalan terlambat.
+  if (currentMinutes < targetMinutes || currentMinutes >= targetMinutes + 75) {
+    return {
+      shouldSend: false,
+      scheduleKey: scheduleKey,
+      message: "Belum memasuki window pengiriman overdue reminder."
+    };
+  }
+
+  if (String(settings.OverdueReminderLastKey || "") === scheduleKey) {
+    return {
+      shouldSend: false,
+      scheduleKey: scheduleKey,
+      message: "Overdue reminder hari ini sudah dikirim."
+    };
+  }
+
+  return {
+    shouldSend: true,
+    scheduleKey: scheduleKey,
+    message: "Jadwal overdue reminder terpenuhi."
+  };
+}
+
+function getDueSoonTrackerItems_(windowDays) {
+  const employeeMap = objectBy_(getEmployees_(), "EmpId");
+  const trackers = getTrackersWithSubTasks_(employeeMap);
+  const todayISO = formatISO_(startOfDay_(new Date()));
+  const limitISO = formatISO_(addDays_(new Date(), windowDays));
+  const items = [];
+
+  trackers.forEach(function (tracker) {
+    if (tracker.SubTaskCount > 0) {
+      tracker.SubTasks.forEach(function (task) {
+        if (task.EffectiveStatus !== "On Going") return;
+
+        const dueISO = String(task.DueDate || "").trim();
+        if (!dueISO || dueISO < todayISO || dueISO > limitISO) return;
+
+        items.push({
+          Type: "Sub Task",
+          ProjectIssueName: tracker.ProjectIssueName,
+          ItemName: task.SubTaskName,
+          PICName: task.PICName || task.PICEmpId || "-",
+          PICTeam: task.PICTeam || "",
+          PICSiteDedicated: task.PICSiteDedicated || "",
+          DueDate: dueISO,
+          DaysRemaining: daysBetweenISO_(todayISO, dueISO),
+          PercentComplete: task.CurrentPercentComplete
+        });
+      });
+      return;
+    }
+
+    if (tracker.EffectiveStatus !== "On Going") return;
+
+    const dueISO = String(tracker.DueDate || "").trim();
+    if (!dueISO || dueISO < todayISO || dueISO > limitISO) return;
+
+    items.push({
+      Type: tracker.TrackerType || "Project",
+      ProjectIssueName: tracker.ProjectIssueName,
+      ItemName: tracker.ProjectIssueName,
+      PICName: tracker.ProjectLeaderName || tracker.ProjectLeaderEmpId || "-",
+      PICTeam: tracker.Department || tracker.ProjectLeaderTeam || "",
+      PICSiteDedicated: tracker.Site || tracker.ProjectLeaderSiteDedicated || "",
+      DueDate: dueISO,
+      DaysRemaining: daysBetweenISO_(todayISO, dueISO),
+      PercentComplete: tracker.CurrentPercentComplete
+    });
+  });
+
+  items.sort(function (a, b) {
+    return String(a.DueDate).localeCompare(String(b.DueDate));
+  });
+
+  return items;
+}
+
+function daysBetweenISO_(fromISO, toISO) {
+  const from = parseISO_(fromISO);
+  const to = parseISO_(toISO);
+
+  if (!from || !to) {
+    return 0;
+  }
+
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function buildOverdueReminderEmail_(items) {
+  const dateLabel = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd MMM yyyy");
+
+  const subject =
+    "[OHS Portal] Reminder Due Date Project & Issue Tracker - " + dateLabel +
+    (items.length ? " (" + items.length + " item)" : "");
+
+  const section = buildEmailSection_(
+    "Project / Issue / Sub Task Mendekati Due Date",
+    items,
+    ["Sisa Hari", "Tipe", "Project / Issue", "Item", "PIC", "Due Date", "% Complete"],
+    function (item) {
+      return [
+        item.DaysRemaining <= 0 ? "Hari ini" : "H-" + item.DaysRemaining,
+        item.Type || "-",
+        item.ProjectIssueName || "-",
+        item.ItemName || "-",
+        [item.PICName, item.PICTeam, item.PICSiteDedicated].filter(Boolean).join(" • ") || "-",
+        formatEmailDate_(item.DueDate),
+        normalizePercentComplete_(item.PercentComplete) + "%"
+      ];
+    },
+    "Tidak ada Project, Issue, atau Sub Task yang mendekati due date."
+  );
+
+  const htmlBody =
+    '<div style="font-family:Arial,sans-serif;color:#0f172a;max-width:1100px;margin:auto;">' +
+      '<div style="padding:20px 22px;background:#b91c1c;color:#fff;border-radius:14px 14px 0 0;">' +
+        '<div style="font-size:22px;font-weight:800;">Reminder Due Date Project &amp; Issue Tracker</div>' +
+        '<div style="margin-top:5px;font-size:12px;opacity:.92;">' +
+          htmlEscapeEmail_(dateLabel) + ' - Sebelum status berubah menjadi Overdue' +
+        '</div>' +
+      '</div>' +
+      '<div style="padding:18px 20px;background:#f8fafc;border:1px solid #e2e8f0;border-top:0;">' +
+        '<div style="margin-bottom:14px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;' +
+          'border-radius:8px;color:#991b1b;font-size:12px;">' +
+          'Daftar berikut akan berubah menjadi <b>Overdue</b> dalam ' + OVERDUE_REMINDER_WINDOW_DAYS +
+          ' hari ke depan apabila belum diselesaikan atau diupdate.' +
+        '</div>' +
+        section +
+        '<div style="margin-top:18px;color:#64748b;font-size:11px;">' +
+          'Email ini dibuat otomatis oleh OHS Portal berdasarkan DueDate pada Project & Issue Tracker.' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  const plainBody =
+    "Reminder Due Date Project & Issue Tracker - " + dateLabel + "\n\n" +
+    (items.length
+      ? items.map(function (item) {
+          return (
+            (item.DaysRemaining <= 0 ? "Hari ini" : "H-" + item.DaysRemaining) +
+            " - [" + (item.Type || "-") + "] " + (item.ProjectIssueName || "-") +
+            (item.ItemName && item.ItemName !== item.ProjectIssueName ? " > " + item.ItemName : "") +
+            " - PIC: " + (item.PICName || "-") +
+            " - Due: " + formatEmailDate_(item.DueDate) +
+            " - " + normalizePercentComplete_(item.PercentComplete) + "%"
+          );
+        }).join("\n")
+      : "Tidak ada Project, Issue, atau Sub Task yang mendekati due date.");
+
+  return {
+    subject: subject,
+    htmlBody: htmlBody,
+    plainBody: plainBody
+  };
+}
+
 function executePortalEmailDigest_(settings, isTest, sourceLabel, scheduledKey) {
   const startedAt = new Date();
 
@@ -4792,6 +5054,9 @@ function readEmailSchedulerSettings_() {
   result.LastEmailCount = Number(result.LastEmailCount || 0);
   result.UpdatedAt = normalizeDateTimeCell_(result.UpdatedAt);
   result.UpdatedBy = String(result.UpdatedBy || "");
+  result.OverdueReminderLastKey = String(result.OverdueReminderLastKey || "");
+  result.OverdueReminderLastRunAt = normalizeDateTimeCell_(result.OverdueReminderLastRunAt);
+  result.OverdueReminderLastCount = Number(result.OverdueReminderLastCount || 0);
 
   return result;
 }
@@ -4840,7 +5105,10 @@ function getDefaultEmailSchedulerSettings_() {
     LastRunStatus: "Belum pernah dijalankan.",
     LastEmailCount: 0,
     UpdatedAt: "",
-    UpdatedBy: ""
+    UpdatedBy: "",
+    OverdueReminderLastKey: "",
+    OverdueReminderLastRunAt: "",
+    OverdueReminderLastCount: 0
   };
 }
 

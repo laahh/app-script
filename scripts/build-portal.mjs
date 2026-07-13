@@ -35,6 +35,8 @@ const PUBLIC_EXPORTS = [
   "sendSchedulerEmailNow",
   "sendSchedulerTestEmail",
   "runScheduledPortalEmail",
+  "runOverdueReminderCheck",
+  "sendOverdueReminderNow",
   "installPortalSchedulerTrigger",
   "removePortalSchedulerTrigger",
 ];
