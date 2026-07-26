@@ -1,6 +1,9 @@
 {
   "version": 2,
   "buildCommand": "npm run build:portal",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/handler?apiPath=:path*" }
+  ],
   "crons": [
     {
       "path": "/api/cron/email",
