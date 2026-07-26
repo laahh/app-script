@@ -1,3 +1,3 @@
-import { vercelHandler } from "../../lib/api-router.js";
+import { vercelHandler } from "../lib/api-router.js";
 
 export default vercelHandler;
