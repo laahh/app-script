@@ -3769,10 +3769,20 @@ function submitEventCheckin(payload) {
       CheckInAt: now
     });
 
+    // Data absensi sudah tersimpan di atas -- kalau format tanggal untuk
+    // respons gagal karena sebab apa pun, jangan sampai peserta melihat
+    // pesan error padahal kehadirannya sebenarnya sudah tercatat.
+    let checkInAtLabel;
+    try {
+      checkInAtLabel = normalizeDateTimeCell_(now);
+    } catch (formatError) {
+      checkInAtLabel = now.toISOString();
+    }
+
     return {
       alreadyCheckedIn: false,
       empName: employee.EmpName,
-      checkInAt: normalizeDateTimeCell_(now)
+      checkInAt: checkInAtLabel
     };
   } finally {
     lock.releaseLock();

@@ -2,17 +2,23 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Absensi Event</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,600&display=swap" rel="stylesheet">
 <style>
   :root {
     --green: #166534;
+    --green-dark: #0f4a26;
     --green-light: #ecfdf5;
+    --green-ring: #bbf7d0;
     --red: #b91c1c;
     --text: #0f172a;
     --muted: #64748b;
-    --border: #e2e8f0;
-    --bg: #f8fafc;
+    --border: #e5e9f0;
+    --bg: #eef2f6;
+    --font: "Plus Jakarta Sans", "Segoe UI", Arial, sans-serif;
   }
   * { box-sizing: border-box; }
   html, body {
@@ -20,138 +26,280 @@
     padding: 0;
     background: var(--bg);
     color: var(--text);
-    font-family: Arial, "Segoe UI", sans-serif;
+    font-family: var(--font);
     -webkit-tap-highlight-color: transparent;
   }
+  body {
+    min-height: 100vh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
   .wrap {
-    max-width: 480px;
+    max-width: 460px;
     margin: 0 auto;
     min-height: 100vh;
     background: #fff;
-    box-shadow: 0 0 0 1px var(--border);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
+    display: flex;
+    flex-direction: column;
   }
+  @media (min-width: 480px) {
+    body { padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: 24px; }
+    .wrap { min-height: calc(100vh - 48px); border-radius: 20px; overflow: hidden; box-shadow: 0 20px 45px -20px rgba(15, 23, 42, .35), 0 0 0 1px var(--border); }
+  }
+
   .header {
-    padding: 22px 20px 18px;
-    background: var(--green);
+    position: relative;
+    padding: 26px 22px 22px;
+    background: linear-gradient(135deg, var(--green) 0%, var(--green-dark) 100%);
     color: #fff;
+    overflow: hidden;
   }
-  .header .badge {
-    display: inline-block;
+  .header::after {
+    content: "";
+    position: absolute;
+    inset: -40% -20% auto auto;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, rgba(255,255,255,.12), transparent 70%);
+  }
+  .header-top {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .header-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(255,255,255,.16);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+  }
+  .badge {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: .04em;
+    letter-spacing: .06em;
     text-transform: uppercase;
-    background: rgba(255,255,255,.18);
-    padding: 3px 9px;
-    border-radius: 999px;
-    margin-bottom: 10px;
+    opacity: .85;
   }
   .header h1 {
-    margin: 0 0 6px;
-    font-size: 19px;
+    position: relative;
+    margin: 0 0 8px;
+    font-size: 20px;
     font-weight: 800;
-    line-height: 1.3;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
   }
   .header .meta {
-    font-size: 12.5px;
-    opacity: .92;
+    position: relative;
+    font-size: 13px;
+    opacity: .9;
     line-height: 1.6;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
+  .header .meta .dot { opacity: .6; }
+
   .body {
-    padding: 18px 20px 28px;
+    padding: 20px 22px 26px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
   .field-label {
     font-size: 12px;
     font-weight: 700;
     color: var(--muted);
     text-transform: uppercase;
-    letter-spacing: .03em;
-    margin: 4px 0 8px;
+    letter-spacing: .04em;
+    margin: 2px 0 9px;
+  }
+  .search-wrap { position: relative; }
+  .search-wrap svg {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
   }
   #search {
     width: 100%;
-    padding: 13px 14px;
+    padding: 13px 14px 13px 40px;
     font-size: 15px;
+    font-family: inherit;
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     outline: none;
+    background: #f8fafc;
+    transition: border-color .15s ease, background .15s ease;
   }
-  #search:focus { border-color: var(--green); }
+  #search:focus { border-color: var(--green); background: #fff; }
+
   #empList {
-    margin-top: 10px;
+    margin-top: 12px;
     max-height: 320px;
     overflow-y: auto;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 14px;
   }
   .emp-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     width: 100%;
     text-align: left;
-    padding: 12px 14px;
+    padding: 11px 13px;
     background: #fff;
     border: 0;
     border-bottom: 1px solid var(--border);
-    font-size: 14.5px;
+    font-size: 14px;
     font-family: inherit;
     color: var(--text);
     cursor: pointer;
+    transition: background .12s ease;
   }
   .emp-item:last-child { border-bottom: 0; }
   .emp-item:active, .emp-item.active { background: var(--green-light); }
-  .emp-item .name { font-weight: 700; }
-  .emp-item .sub { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .emp-item .done { float: right; font-size: 11px; font-weight: 700; color: var(--green); }
+  .emp-avatar {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12.5px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .emp-info { min-width: 0; flex: 1; }
+  .emp-item .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .emp-item .sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .emp-item .done {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--green);
+    background: var(--green-light);
+    border: 1px solid var(--green-ring);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .emp-item .check {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
   .empty-hint {
-    padding: 16px 14px;
+    padding: 20px 14px;
     color: var(--muted);
     font-size: 13px;
     text-align: center;
+    line-height: 1.5;
   }
+
   .selected-box {
     display: none;
+    align-items: center;
+    gap: 12px;
     margin-top: 14px;
-    padding: 14px;
+    padding: 13px 14px;
     background: var(--green-light);
-    border: 1px solid #bbf7d0;
-    border-radius: 10px;
+    border: 1px solid var(--green-ring);
+    border-radius: 14px;
   }
-  .selected-box.show { display: block; }
-  .selected-box .label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; }
-  .selected-box .value { font-size: 16px; font-weight: 800; margin-top: 3px; }
+  .selected-box.show { display: flex; }
+  .selected-box .emp-avatar { background: var(--green-dark); }
+  .selected-box .label { font-size: 10.5px; color: #15803d; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+  .selected-box .value { font-size: 15.5px; font-weight: 800; margin-top: 2px; color: var(--text); }
+
   .btn {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
     width: 100%;
-    margin-top: 14px;
+    margin-top: 16px;
     padding: 15px;
     border: 0;
-    border-radius: 10px;
+    border-radius: 13px;
     background: var(--green);
     color: #fff;
     font-size: 15.5px;
     font-weight: 800;
     font-family: inherit;
     cursor: pointer;
+    box-shadow: 0 8px 20px -8px rgba(22, 101, 52, .55);
+    transition: transform .1s ease, box-shadow .1s ease, opacity .15s ease;
   }
-  .btn:disabled { opacity: .5; cursor: default; }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .55; cursor: default; box-shadow: none; }
+  .btn-spinner {
+    width: 16px; height: 16px;
+    border: 2.5px solid rgba(255,255,255,.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+  }
+  .btn.loading .btn-spinner { display: inline-block; }
+
   .msg {
     margin-top: 14px;
     padding: 12px 14px;
-    border-radius: 10px;
-    font-size: 13.5px;
+    border-radius: 12px;
+    font-size: 13px;
     line-height: 1.5;
   }
   .msg.error { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
-  .msg.info { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
+
   .state-screen {
     text-align: center;
-    padding: 60px 24px;
+    padding: 70px 26px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: fadeUp .35s ease;
   }
-  .state-screen .icon { font-size: 46px; line-height: 1; margin-bottom: 14px; }
-  .state-screen h2 { margin: 0 0 8px; font-size: 18px; }
-  .state-screen p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .state-icon {
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 34px;
+    margin-bottom: 20px;
+    animation: pop .35s cubic-bezier(.34,1.56,.64,1);
+  }
+  .state-icon.success { background: var(--green-light); border: 1px solid var(--green-ring); }
+  .state-icon.warn { background: #fff7ed; border: 1px solid #fdba74; }
+  .state-icon.error { background: #fef2f2; border: 1px solid #fecaca; }
+  .state-screen h2 { margin: 0 0 8px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+  .state-screen p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; max-width: 300px; }
+  .state-screen .name-highlight { color: var(--text); font-weight: 700; }
+
   .spinner {
-    width: 30px; height: 30px;
+    width: 32px; height: 32px;
     border: 3px solid var(--border);
     border-top-color: var(--green);
     border-radius: 50%;
@@ -159,6 +307,15 @@
     animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { 0% { transform: scale(.6); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+  .footer-note {
+    text-align: center;
+    padding: 14px 22px 22px;
+    color: var(--muted);
+    font-size: 11px;
+  }
   .hide { display: none !important; }
 </style>
 </head>
@@ -170,37 +327,50 @@
     </div>
 
     <div id="errorScreen" class="state-screen hide">
-      <div class="icon">&#9888;&#65039;</div>
+      <div class="state-icon error">&#9888;&#65039;</div>
       <h2>Tidak Bisa Memuat</h2>
       <p id="errorText">Terjadi kesalahan.</p>
     </div>
 
     <div id="successScreen" class="state-screen hide">
-      <div class="icon">&#9989;</div>
+      <div id="successIcon" class="state-icon success">&#9989;</div>
       <h2 id="successTitle">Absensi Tercatat</h2>
       <p id="successText"></p>
     </div>
 
-    <div id="formScreen" class="hide">
+    <div id="formScreen" class="hide" style="display:flex;flex-direction:column;flex:1;">
       <div class="header">
-        <div class="badge">Absensi Online</div>
+        <div class="header-top">
+          <div class="header-icon">&#128203;</div>
+          <div class="badge">Absensi Online</div>
+        </div>
         <h1 id="eventName"></h1>
         <div class="meta" id="eventMeta"></div>
       </div>
       <div class="body">
         <div class="field-label">Cari &amp; Pilih Nama Anda</div>
-        <input id="search" type="text" placeholder="Ketik nama..." autocomplete="off">
+        <div class="search-wrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input id="search" type="text" placeholder="Ketik nama Anda..." autocomplete="off">
+        </div>
         <div id="empList"></div>
 
         <div id="selectedBox" class="selected-box">
-          <div class="label">Nama Terpilih</div>
-          <div class="value" id="selectedName"></div>
+          <div class="emp-avatar" id="selectedAvatar"></div>
+          <div>
+            <div class="label">Nama Terpilih</div>
+            <div class="value" id="selectedName"></div>
+          </div>
         </div>
 
         <div id="formMsg"></div>
 
-        <button id="submitBtn" class="btn" disabled>Absen Sekarang</button>
+        <button id="submitBtn" class="btn" disabled>
+          <span class="btn-spinner"></span>
+          <span class="btn-label">Absen Sekarang</span>
+        </button>
       </div>
+      <div class="footer-note">OHS Portal &middot; Absensi Digital</div>
     </div>
   </div>
 
@@ -236,15 +406,23 @@
   var employees = [];
   var checkedInIds = [];
   var selectedEmpId = "";
-  var selectedEmpName = "";
   var submitting = false;
 
   var searchInput = document.getElementById("search");
   var empListEl = document.getElementById("empList");
   var selectedBox = document.getElementById("selectedBox");
+  var selectedAvatarEl = document.getElementById("selectedAvatar");
   var selectedNameEl = document.getElementById("selectedName");
   var submitBtn = document.getElementById("submitBtn");
+  var submitBtnLabel = submitBtn.querySelector(".btn-label");
   var formMsg = document.getElementById("formMsg");
+
+  function initials(name) {
+    var parts = String(name || "").trim().split(/\s+/);
+    var first = parts[0] && parts[0][0] ? parts[0][0] : "";
+    var second = parts[1] && parts[1][0] ? parts[1][0] : "";
+    return (first + second).toUpperCase() || "?";
+  }
 
   function renderList(filterText) {
     var text = (filterText || "").trim().toLowerCase();
@@ -262,19 +440,25 @@
     }
 
     if (!matches.length) {
-      empListEl.innerHTML = '<div class="empty-hint">Nama tidak ditemukan.</div>';
+      empListEl.innerHTML = '<div class="empty-hint">Nama tidak ditemukan.<br>Coba kata kunci lain.</div>';
       return;
     }
 
     matches.forEach(function (emp) {
       var alreadyIn = checkedInIds.indexOf(emp.EmpId) >= 0;
+      var isSelected = emp.EmpId === selectedEmpId;
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "emp-item" + (emp.EmpId === selectedEmpId ? " active" : "");
+      btn.className = "emp-item" + (isSelected ? " active" : "");
       btn.innerHTML =
-        '<span class="name">' + escapeHtml(emp.EmpName) + "</span>" +
-        (alreadyIn ? '<span class="done">Sudah absen</span>' : "") +
-        '<span class="sub">' + escapeHtml([emp.Position, emp.Team].filter(Boolean).join(" • ")) + "</span>";
+        '<span class="emp-avatar">' + escapeHtml(initials(emp.EmpName)) + '</span>' +
+        '<span class="emp-info">' +
+          '<span class="name">' + escapeHtml(emp.EmpName) + "</span>" +
+          '<span class="sub">' + escapeHtml([emp.Position, emp.Team].filter(Boolean).join(" • ")) + "</span>" +
+        "</span>" +
+        (isSelected
+          ? '<span class="check">&#10003;</span>'
+          : alreadyIn ? '<span class="done">Sudah absen</span>' : "");
       btn.addEventListener("click", function () {
         selectEmployee(emp);
       });
@@ -284,7 +468,7 @@
 
   function selectEmployee(emp) {
     selectedEmpId = emp.EmpId;
-    selectedEmpName = emp.EmpName;
+    selectedAvatarEl.textContent = initials(emp.EmpName);
     selectedNameEl.textContent = emp.EmpName;
     selectedBox.classList.add("show");
     submitBtn.disabled = false;
@@ -311,11 +495,16 @@
     renderList(searchInput.value);
   });
 
+  function setSubmitting(isSubmitting) {
+    submitting = isSubmitting;
+    submitBtn.disabled = isSubmitting;
+    submitBtn.classList.toggle("loading", isSubmitting);
+    submitBtnLabel.textContent = isSubmitting ? "Memproses..." : "Absen Sekarang";
+  }
+
   submitBtn.addEventListener("click", function () {
     if (submitting || !selectedEmpId) return;
-    submitting = true;
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Memproses...";
+    setSubmitting(true);
     formMsg.innerHTML = "";
 
     fetch(API_BASE + "/events/checkin", {
@@ -330,21 +519,24 @@
         });
       })
       .then(function (data) {
+        var icon = document.getElementById("successIcon");
         if (data.alreadyCheckedIn) {
+          icon.className = "state-icon warn";
+          icon.innerHTML = "&#8505;&#65039;";
           document.getElementById("successTitle").textContent = "Anda Sudah Absen";
-          document.getElementById("successText").textContent =
-            data.empName + " sudah tercatat hadir sebelumnya.";
+          document.getElementById("successText").innerHTML =
+            '<span class="name-highlight">' + escapeHtml(data.empName) + '</span> sudah tercatat hadir sebelumnya pada event ini.';
         } else {
+          icon.className = "state-icon success";
+          icon.innerHTML = "&#9989;";
           document.getElementById("successTitle").textContent = "Absensi Tercatat";
-          document.getElementById("successText").textContent =
-            "Terima kasih, " + data.empName + ". Kehadiran Anda berhasil dicatat.";
+          document.getElementById("successText").innerHTML =
+            'Terima kasih, <span class="name-highlight">' + escapeHtml(data.empName) + '</span>. Kehadiran Anda berhasil dicatat.';
         }
         showScreen("successScreen");
       })
       .catch(function (err) {
-        submitting = false;
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Absen Sekarang";
+        setSubmitting(false);
         formMsg.innerHTML = '<div class="msg error">' + escapeHtml(err.message) + "</div>";
       });
   });
@@ -361,8 +553,11 @@
       checkedInIds = data.checkedInEmpIds || [];
 
       document.getElementById("eventName").textContent = data.event.EventName;
-      document.getElementById("eventMeta").textContent =
-        [formatDateLabel(data.event.EventDate), data.event.Where].filter(Boolean).join(" • ");
+      document.getElementById("eventMeta").innerHTML =
+        [formatDateLabel(data.event.EventDate), data.event.Where]
+          .filter(Boolean)
+          .map(escapeHtml)
+          .join(' <span class="dot">&middot;</span> ');
 
       showScreen("formScreen");
     })
