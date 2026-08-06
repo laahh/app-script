@@ -33,5 +33,12 @@ export default async function handler(req, res) {
     result.overdueReminder = { sent: false, error: err.message || "Overdue reminder cron failed" };
   }
 
+  try {
+    result.hseSync = await portal.runHseSyncCheck();
+  } catch (err) {
+    hasError = true;
+    result.hseSync = { synced: false, error: err.message || "HSE sync cron failed" };
+  }
+
   sendJson(res, hasError ? 500 : 200, result);
 }

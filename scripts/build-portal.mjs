@@ -44,6 +44,8 @@ const PUBLIC_EXPORTS = [
   "runScheduledPortalEmail",
   "runOverdueReminderCheck",
   "sendOverdueReminderNow",
+  "runHseSyncCheck",
+  "syncHseEmployeesNow",
   "installPortalSchedulerTrigger",
   "removePortalSchedulerTrigger",
 ];
@@ -140,6 +142,7 @@ code = code.replace(/Session\.getActiveUser\(\)\.getEmail\(\)/g, "getActiveUserE
 code = code.replace(/LockService\.getScriptLock\(\)/g, "getScriptLock()");
 code = code.replace(/MailApp\.getRemainingDailyQuota\(\)/g, "getRemainingDailyQuota()");
 code = code.replace(/MailApp\.sendEmail\(/g, "await sendEmail(");
+code = code.replace(/UrlFetchApp\.fetch\(/g, "await urlFetch(");
 code = code.replace(
   /name:\s*"OHS Portal Scheduler"/g,
   "name: getDefaultFromName()"
@@ -263,6 +266,7 @@ const AWAIT_TARGETS = [
   "ensureHeaders_\\(",
   "appendObjectRow_\\(",
   "setObjectRowValues_\\(",
+  "replaceSheetDataRows_\\(",
   "getEmployees_\\(",
   "getLeaveTypes_\\(",
   "getLeaveRequests_\\(",
@@ -356,6 +360,7 @@ import {
   ensureHeaders_,
   appendObjectRow_,
   setObjectRowValues_,
+  replaceSheetDataRows_,
 } from "../sheets/adapter.js";
 
 import {
@@ -368,6 +373,7 @@ import {
   getScriptLock,
   installPortalSchedulerTrigger,
   removePortalSchedulerTrigger,
+  urlFetch,
 } from "../gas-compat.js";
 
 import { sendEmail, getRemainingDailyQuota, getDefaultFromName } from "../mail.js";

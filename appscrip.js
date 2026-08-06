@@ -174,7 +174,10 @@ const EMAIL_SCHEDULER_HEADERS = [
   "IncludePreviousDays",
   "OverdueReminderLastKey",
   "OverdueReminderLastRunAt",
-  "OverdueReminderLastCount"
+  "OverdueReminderLastCount",
+  "HseSyncLastKey",
+  "HseSyncLastRunAt",
+  "HseSyncLastCount"
 ];
 
 // Reminder H-3 sampai H-0 sebelum DueDate Project/Issue/Sub Task, dikirim
@@ -198,6 +201,26 @@ const OVERDUE_REMINDER_RECIPIENTS = [
 const OVERDUE_REMINDER_WINDOW_DAYS = 3;
 const OVERDUE_REMINDER_HOUR = 8;
 const OVERDUE_REMINDER_MINUTE = 0;
+
+// Sinkronisasi data karyawan dari API HSE (sekali seminggu, hari & jam
+// harus jatuh pada window cron harian yang sama -- lihat vercel.json).
+// Kredensial (HSE_API_KEY dkk) dibaca dari Script Properties / env var,
+// TIDAK di-hardcode di sini.
+const HSE_SYNC_DAY_OF_WEEK = 1; // 1 = Senin (Date.getDay())
+const HSE_SYNC_HOUR = 8;
+const HSE_SYNC_MINUTE = 0;
+const HSE_API_DEFAULT_BASE = "https://hseautomation.beraucoal.co.id";
+const HSE_API_DEFAULT_COMPANY_ID = "5194";
+
+const EMPLOYEE_SYNC_HEADERS = [
+  "EmpId",
+  "SID",
+  "EmpName",
+  "Position",
+  "Team",
+  "SiteDedicated",
+  "PhotoUrl"
+];
 
 // Absensi online (QR check-in) & Notulensi per Event.
 const SHEET_EVENT_ATTENDANCE = "EventAttendance";
@@ -3538,26 +3561,19 @@ function findEventById_(eventId) {
 }
 
 function findRowIndexByValue_(sheet, columnName, value) {
-  if (sheet.getLastRow() < 2) {
+  const table = readTable_(sheet);
+
+  if (!table.head.length) {
     return -1;
   }
 
-  const headers = sheet
-    .getRange(1, 1, 1, sheet.getLastColumn())
-    .getValues()[0]
-    .map(function (header) {
-      return String(header || "").trim();
-    });
-
-  const columnIndex = headers.indexOf(columnName);
+  const columnIndex = table.head.indexOf(columnName);
 
   if (columnIndex < 0) {
     return -1;
   }
 
-  const values = sheet
-    .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
-    .getValues();
+  const values = table.rows;
 
   for (let index = 0; index < values.length; index++) {
     if (String(values[index][columnIndex] || "").trim() === String(value)) {
@@ -4556,6 +4572,37 @@ function setObjectRowValues_(sheet, rowNumber, rowObject) {
   });
 }
 
+/**
+ * Menimpa seluruh baris data (di luar header) dengan rowObjects yang baru.
+ * Baris lama yang tersisa di bawah data baru (kalau jumlahnya berkurang)
+ * ikut dikosongkan supaya tidak ada data basi yang nyangkut.
+ */
+function replaceSheetDataRows_(sheet, headers, rowObjects) {
+  ensureHeaders_(sheet, headers);
+
+  const list = rowObjects || [];
+  const lastRow = sheet.getLastRow();
+  const lastColumn = Math.max(sheet.getLastColumn(), headers.length);
+
+  if (list.length) {
+    const values = list.map(function (rowObject) {
+      return headers.map(function (header) {
+        return Object.prototype.hasOwnProperty.call(rowObject, header)
+          ? rowObject[header]
+          : "";
+      });
+    });
+
+    sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+  }
+
+  const staleRowCount = lastRow - (list.length + 1);
+
+  if (staleRowCount > 0) {
+    sheet.getRange(list.length + 2, 1, staleRowCount, lastColumn).clearContent();
+  }
+}
+
 
 function headerIndexMap_(head) {
   const knownHeaders = LEAVE_HEADERS.concat(
@@ -5115,6 +5162,218 @@ function buildOverdueReminderEmail_(items) {
   };
 }
 
+/* =========================================================
+ * SINKRONISASI KARYAWAN DARI API HSE
+ * Dipanggil sekali seminggu (hari Senin, jam HSE_SYNC_HOUR) lewat cron
+ * yang sama dengan digest/reminder -- bukan setiap request, supaya API
+ * HSE tidak terlalu sering dipanggil.
+ * ========================================================= */
+
+function getHseApiConfig_() {
+  return {
+    apiKey: PropertiesService.getScriptProperties().getProperty("HSE_API_KEY") || "",
+    apiBase:
+      PropertiesService.getScriptProperties().getProperty("HSE_API_BASE") ||
+      HSE_API_DEFAULT_BASE,
+    companyId:
+      PropertiesService.getScriptProperties().getProperty("HSE_COMPANY_ID") ||
+      HSE_API_DEFAULT_COMPANY_ID
+  };
+}
+
+function fetchHseEmployees_() {
+  const config = getHseApiConfig_();
+
+  if (!config.apiKey) {
+    throw new Error(
+      "HSE_API_KEY belum dikonfigurasi. Set environment variable HSE_API_KEY di Vercel."
+    );
+  }
+
+  const url =
+    config.apiBase +
+    "/sid2/api/ftwApi/getEmployee?companyId=" +
+    encodeURIComponent(config.companyId) +
+    "&page=1&size=30000";
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "get",
+    headers: { "x-api-key": config.apiKey },
+    muteHttpExceptions: true
+  });
+
+  const responseCode = response.getResponseCode();
+
+  if (responseCode !== 200) {
+    throw new Error(
+      "HSE API error " + responseCode + ": " +
+      String(response.getContentText() || "").slice(0, 300)
+    );
+  }
+
+  const data = JSON.parse(response.getContentText());
+
+  return (data.results || []).filter(function (item) {
+    return String(item.status || "").trim().toUpperCase() === "AKTIF";
+  });
+}
+
+/**
+ * Mengambil data karyawan dari API HSE lalu menimpa sheet Employees.
+ * Header kolom mengikuti header yang sudah ada di sheet (kalau sheet
+ * sudah ada) supaya variasi nama kolom lama (mis. "Site_Dedicated")
+ * tidak dianggap kolom baru.
+ */
+function syncEmployeesFromHse_() {
+  const hseEmployees = fetchHseEmployees_();
+
+  let headers = EMPLOYEE_SYNC_HEADERS;
+
+  try {
+    const existingTable = readTable_(getSheet_(SHEET_EMPLOYEES));
+
+    if (existingTable.head.length) {
+      headers = existingTable.head;
+    }
+  } catch (error) {
+    // Sheet Employees belum ada -- pakai header default (EMPLOYEE_SYNC_HEADERS).
+  }
+
+  const siteHeaderIndex = findHeaderIndex_(headers, [
+    "SiteDedicated",
+    "Site_Dedicated",
+    "Site Dedicated"
+  ]);
+  const siteHeaderName = siteHeaderIndex >= 0 ? headers[siteHeaderIndex] : "SiteDedicated";
+
+  if (siteHeaderIndex < 0) {
+    headers = headers.concat([siteHeaderName]);
+  }
+
+  const sheet = getOrCreateSheet_(SHEET_EMPLOYEES, headers);
+
+  const rows = hseEmployees
+    .map(function (item) {
+      const row = {
+        EmpId: String(item.npk || "").trim(),
+        SID: String(item.sidCode || "").trim(),
+        EmpName: String(item.name || "").trim(),
+        Position: String(item.structuralPosition || "").trim(),
+        Team: String(item.departmentName || "").trim(),
+        PhotoUrl: ""
+      };
+      row[siteHeaderName] = String(item.dedicatedSite || "").trim();
+      return row;
+    })
+    .filter(function (row) {
+      return row.EmpId && row.EmpName;
+    });
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    replaceSheetDataRows_(sheet, headers, rows);
+  } finally {
+    lock.releaseLock();
+  }
+
+  return {
+    syncedCount: rows.length
+  };
+}
+
+function getHseSyncDecision_(settings, now) {
+  const current = now || new Date();
+  const syncKey = formatISO_(startOfWeekMonday_(current));
+  const currentMinutes = current.getHours() * 60 + current.getMinutes();
+  const targetMinutes = HSE_SYNC_HOUR * 60 + HSE_SYNC_MINUTE;
+
+  if (current.getDay() !== HSE_SYNC_DAY_OF_WEEK) {
+    return {
+      shouldSync: false,
+      syncKey: syncKey,
+      message: "Bukan hari sinkronisasi HSE."
+    };
+  }
+
+  // Window 75 menit mengantisipasi trigger yang berjalan terlambat.
+  if (currentMinutes < targetMinutes || currentMinutes >= targetMinutes + 75) {
+    return {
+      shouldSync: false,
+      syncKey: syncKey,
+      message: "Belum memasuki window sinkronisasi HSE."
+    };
+  }
+
+  if (String(settings.HseSyncLastKey || "") === syncKey) {
+    return {
+      shouldSync: false,
+      syncKey: syncKey,
+      message: "Sinkronisasi HSE minggu ini sudah dijalankan."
+    };
+  }
+
+  return {
+    shouldSync: true,
+    syncKey: syncKey,
+    message: "Jadwal sinkronisasi HSE terpenuhi."
+  };
+}
+
+function runHseSyncCheck() {
+  const settings = readEmailSchedulerSettings_();
+  const decision = getHseSyncDecision_(settings, new Date());
+
+  if (!decision.shouldSync) {
+    return {
+      synced: false,
+      message: decision.message,
+      syncKey: decision.syncKey || ""
+    };
+  }
+
+  return executeHseSync_(settings, decision.syncKey, "Scheduled run");
+}
+
+function syncHseEmployeesNow() {
+  const settings = readEmailSchedulerSettings_();
+  const syncKey = formatISO_(startOfWeekMonday_(new Date()));
+
+  return executeHseSync_(settings, syncKey, "Manual run");
+}
+
+function executeHseSync_(settings, syncKey, sourceLabel) {
+  const startedAt = new Date();
+
+  try {
+    const result = syncEmployeesFromHse_();
+
+    const updatedSettings = Object.assign({}, settings, {
+      HseSyncLastKey: syncKey || settings.HseSyncLastKey || "",
+      HseSyncLastRunAt: startedAt,
+      HseSyncLastCount: result.syncedCount
+    });
+
+    writeEmailSchedulerSettings_(updatedSettings);
+
+    return {
+      synced: true,
+      syncedCount: result.syncedCount,
+      runAt: normalizeDateTimeCell_(startedAt),
+      source: sourceLabel
+    };
+  } catch (error) {
+    const failedSettings = Object.assign({}, settings, {
+      HseSyncLastRunAt: startedAt,
+      HseSyncLastCount: 0
+    });
+
+    writeEmailSchedulerSettings_(failedSettings);
+    throw error;
+  }
+}
+
 function executePortalEmailDigest_(settings, isTest, sourceLabel, scheduledKey) {
   const startedAt = new Date();
 
@@ -5550,6 +5809,9 @@ function readEmailSchedulerSettings_() {
   result.OverdueReminderLastKey = String(result.OverdueReminderLastKey || "");
   result.OverdueReminderLastRunAt = normalizeDateTimeCell_(result.OverdueReminderLastRunAt);
   result.OverdueReminderLastCount = Number(result.OverdueReminderLastCount || 0);
+  result.HseSyncLastKey = String(result.HseSyncLastKey || "");
+  result.HseSyncLastRunAt = normalizeDateTimeCell_(result.HseSyncLastRunAt);
+  result.HseSyncLastCount = Number(result.HseSyncLastCount || 0);
 
   return result;
 }
@@ -5601,7 +5863,10 @@ function getDefaultEmailSchedulerSettings_() {
     UpdatedBy: "",
     OverdueReminderLastKey: "",
     OverdueReminderLastRunAt: "",
-    OverdueReminderLastCount: 0
+    OverdueReminderLastCount: 0,
+    HseSyncLastKey: "",
+    HseSyncLastRunAt: "",
+    HseSyncLastCount: 0
   };
 }
 
