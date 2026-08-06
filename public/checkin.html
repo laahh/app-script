@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Absensi Event</title>
+<style>
+  :root {
+    --green: #166534;
+    --green-light: #ecfdf5;
+    --red: #b91c1c;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Arial, "Segoe UI", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: #fff;
+    box-shadow: 0 0 0 1px var(--border);
+  }
+  .header {
+    padding: 22px 20px 18px;
+    background: var(--green);
+    color: #fff;
+  }
+  .header .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,.18);
+    padding: 3px 9px;
+    border-radius: 999px;
+    margin-bottom: 10px;
+  }
+  .header h1 {
+    margin: 0 0 6px;
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.3;
+  }
+  .header .meta {
+    font-size: 12.5px;
+    opacity: .92;
+    line-height: 1.6;
+  }
+  .body {
+    padding: 18px 20px 28px;
+  }
+  .field-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    margin: 4px 0 8px;
+  }
+  #search {
+    width: 100%;
+    padding: 13px 14px;
+    font-size: 15px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    outline: none;
+  }
+  #search:focus { border-color: var(--green); }
+  #empList {
+    margin-top: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .emp-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 12px 14px;
+    background: #fff;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14.5px;
+    font-family: inherit;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .emp-item:last-child { border-bottom: 0; }
+  .emp-item:active, .emp-item.active { background: var(--green-light); }
+  .emp-item .name { font-weight: 700; }
+  .emp-item .sub { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .emp-item .done { float: right; font-size: 11px; font-weight: 700; color: var(--green); }
+  .empty-hint {
+    padding: 16px 14px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+  }
+  .selected-box {
+    display: none;
+    margin-top: 14px;
+    padding: 14px;
+    background: var(--green-light);
+    border: 1px solid #bbf7d0;
+    border-radius: 10px;
+  }
+  .selected-box.show { display: block; }
+  .selected-box .label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; }
+  .selected-box .value { font-size: 16px; font-weight: 800; margin-top: 3px; }
+  .btn {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 15px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--green);
+    color: #fff;
+    font-size: 15.5px;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .msg {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .msg.error { background: #fef2f2; border: 1px solid #fecaca; color: var(--red); }
+  .msg.info { background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; }
+  .state-screen {
+    text-align: center;
+    padding: 60px 24px;
+  }
+  .state-screen .icon { font-size: 46px; line-height: 1; margin-bottom: 14px; }
+  .state-screen h2 { margin: 0 0 8px; font-size: 18px; }
+  .state-screen p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+  .spinner {
+    width: 30px; height: 30px;
+    border: 3px solid var(--border);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hide { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="loadingScreen" class="state-screen">
+      <div class="spinner"></div>
+      <p>Memuat data event...</p>
+    </div>
+
+    <div id="errorScreen" class="state-screen hide">
+      <div class="icon">&#9888;&#65039;</div>
+      <h2>Tidak Bisa Memuat</h2>
+      <p id="errorText">Terjadi kesalahan.</p>
+    </div>
+
+    <div id="successScreen" class="state-screen hide">
+      <div class="icon">&#9989;</div>
+      <h2 id="successTitle">Absensi Tercatat</h2>
+      <p id="successText"></p>
+    </div>
+
+    <div id="formScreen" class="hide">
+      <div class="header">
+        <div class="badge">Absensi Online</div>
+        <h1 id="eventName"></h1>
+        <div class="meta" id="eventMeta"></div>
+      </div>
+      <div class="body">
+        <div class="field-label">Cari &amp; Pilih Nama Anda</div>
+        <input id="search" type="text" placeholder="Ketik nama..." autocomplete="off">
+        <div id="empList"></div>
+
+        <div id="selectedBox" class="selected-box">
+          <div class="label">Nama Terpilih</div>
+          <div class="value" id="selectedName"></div>
+        </div>
+
+        <div id="formMsg"></div>
+
+        <button id="submitBtn" class="btn" disabled>Absen Sekarang</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var API_BASE = "/api";
+  var params = new URLSearchParams(window.location.search);
+  var eventId = (params.get("eventId") || "").trim();
+
+  var loadingScreen = document.getElementById("loadingScreen");
+  var errorScreen = document.getElementById("errorScreen");
+  var successScreen = document.getElementById("successScreen");
+  var formScreen = document.getElementById("formScreen");
+
+  function showScreen(name) {
+    loadingScreen.classList.add("hide");
+    errorScreen.classList.add("hide");
+    successScreen.classList.add("hide");
+    formScreen.classList.add("hide");
+    document.getElementById(name).classList.remove("hide");
+  }
+
+  function showError(text) {
+    document.getElementById("errorText").textContent = text || "Terjadi kesalahan.";
+    showScreen("errorScreen");
+  }
+
+  if (!eventId) {
+    showError("Link tidak valid: Event ID tidak ditemukan pada URL.");
+    return;
+  }
+
+  var employees = [];
+  var checkedInIds = [];
+  var selectedEmpId = "";
+  var selectedEmpName = "";
+  var submitting = false;
+
+  var searchInput = document.getElementById("search");
+  var empListEl = document.getElementById("empList");
+  var selectedBox = document.getElementById("selectedBox");
+  var selectedNameEl = document.getElementById("selectedName");
+  var submitBtn = document.getElementById("submitBtn");
+  var formMsg = document.getElementById("formMsg");
+
+  function renderList(filterText) {
+    var text = (filterText || "").trim().toLowerCase();
+    var matches = !text
+      ? []
+      : employees.filter(function (emp) {
+          return (emp.EmpName || "").toLowerCase().indexOf(text) >= 0;
+        }).slice(0, 30);
+
+    empListEl.innerHTML = "";
+
+    if (!text) {
+      empListEl.innerHTML = '<div class="empty-hint">Ketik minimal 1 huruf untuk mencari nama.</div>';
+      return;
+    }
+
+    if (!matches.length) {
+      empListEl.innerHTML = '<div class="empty-hint">Nama tidak ditemukan.</div>';
+      return;
+    }
+
+    matches.forEach(function (emp) {
+      var alreadyIn = checkedInIds.indexOf(emp.EmpId) >= 0;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "emp-item" + (emp.EmpId === selectedEmpId ? " active" : "");
+      btn.innerHTML =
+        '<span class="name">' + escapeHtml(emp.EmpName) + "</span>" +
+        (alreadyIn ? '<span class="done">Sudah absen</span>' : "") +
+        '<span class="sub">' + escapeHtml([emp.Position, emp.Team].filter(Boolean).join(" • ")) + "</span>";
+      btn.addEventListener("click", function () {
+        selectEmployee(emp);
+      });
+      empListEl.appendChild(btn);
+    });
+  }
+
+  function selectEmployee(emp) {
+    selectedEmpId = emp.EmpId;
+    selectedEmpName = emp.EmpName;
+    selectedNameEl.textContent = emp.EmpName;
+    selectedBox.classList.add("show");
+    submitBtn.disabled = false;
+    renderList(searchInput.value);
+  }
+
+  function escapeHtml(value) {
+    return String(value === null || value === undefined ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function formatDateLabel(iso) {
+    if (!iso) return "";
+    var parts = String(iso).split("-");
+    if (parts.length !== 3) return iso;
+    var months = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Ags","Sep","Okt","Nov","Des"];
+    var monthIndex = Number(parts[1]) - 1;
+    return Number(parts[2]) + " " + (months[monthIndex] || parts[1]) + " " + parts[0];
+  }
+
+  searchInput.addEventListener("input", function () {
+    renderList(searchInput.value);
+  });
+
+  submitBtn.addEventListener("click", function () {
+    if (submitting || !selectedEmpId) return;
+    submitting = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Memproses...";
+    formMsg.innerHTML = "";
+
+    fetch(API_BASE + "/events/checkin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ EventId: eventId, EmpId: selectedEmpId })
+    })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error(data.error || "Gagal mengirim absensi.");
+          return data;
+        });
+      })
+      .then(function (data) {
+        if (data.alreadyCheckedIn) {
+          document.getElementById("successTitle").textContent = "Anda Sudah Absen";
+          document.getElementById("successText").textContent =
+            data.empName + " sudah tercatat hadir sebelumnya.";
+        } else {
+          document.getElementById("successTitle").textContent = "Absensi Tercatat";
+          document.getElementById("successText").textContent =
+            "Terima kasih, " + data.empName + ". Kehadiran Anda berhasil dicatat.";
+        }
+        showScreen("successScreen");
+      })
+      .catch(function (err) {
+        submitting = false;
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Absen Sekarang";
+        formMsg.innerHTML = '<div class="msg error">' + escapeHtml(err.message) + "</div>";
+      });
+  });
+
+  fetch(API_BASE + "/events/checkin-info?eventId=" + encodeURIComponent(eventId))
+    .then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok) throw new Error(data.error || "Event tidak ditemukan.");
+        return data;
+      });
+    })
+    .then(function (data) {
+      employees = data.employees || [];
+      checkedInIds = data.checkedInEmpIds || [];
+
+      document.getElementById("eventName").textContent = data.event.EventName;
+      document.getElementById("eventMeta").textContent =
+        [formatDateLabel(data.event.EventDate), data.event.Where].filter(Boolean).join(" • ");
+
+      showScreen("formScreen");
+    })
+    .catch(function (err) {
+      showError(err.message);
+    });
+})();
+</script>
+</body>
+</html>

@@ -40,6 +40,11 @@
     updateEvent: { method: "POST", path: "events/update" },
     updateEventReadiness: { method: "POST", path: "events/readiness" },
     getEventMakerData: { method: "POST", path: "events/maker-data" },
+    getEventAttendanceSummary: { method: "GET", path: "events/attendance" },
+    getEventMinutes: { method: "GET", path: "events/minutes" },
+    saveEventMinutes: { method: "POST", path: "events/minutes" },
+    addEventActionItem: { method: "POST", path: "events/action-items/add" },
+    updateEventActionItemStatus: { method: "POST", path: "events/action-items/status" },
     createTracker: { method: "POST", path: "tracker/create" },
     updateTrackerDetails: { method: "POST", path: "tracker/update-details" },
     getTrackerData: { method: "POST", path: "tracker/data" },
@@ -67,6 +72,8 @@
         url.searchParams.set("subTaskId", typeof first === "object" ? first.subTaskId || first : first);
       } else if (route.path === "tracker/log") {
         url.searchParams.set("trackerId", typeof first === "object" ? first.trackerId || first : first);
+      } else if (route.path === "events/attendance" || route.path === "events/minutes") {
+        url.searchParams.set("eventId", typeof first === "object" ? first.eventId || first : first);
       }
     }
 

@@ -199,6 +199,43 @@ const OVERDUE_REMINDER_WINDOW_DAYS = 3;
 const OVERDUE_REMINDER_HOUR = 8;
 const OVERDUE_REMINDER_MINUTE = 0;
 
+// Absensi online (QR check-in) & Notulensi per Event.
+const SHEET_EVENT_ATTENDANCE = "EventAttendance";
+const SHEET_EVENT_MINUTES = "EventMinutes";
+const SHEET_EVENT_ACTION_ITEMS = "EventActionItems";
+
+const EVENT_ATTENDANCE_HEADERS = [
+  "Timestamp",
+  "AttendanceId",
+  "EventId",
+  "EmpId",
+  "EmpName",
+  "Team",
+  "Position",
+  "SiteDedicated",
+  "CheckInAt"
+];
+
+const EVENT_MINUTES_HEADERS = [
+  "Timestamp",
+  "EventId",
+  "Summary",
+  "UpdatedAt",
+  "UpdatedByEmpId",
+  "UpdatedByName"
+];
+
+const EVENT_ACTION_ITEM_HEADERS = [
+  "Timestamp",
+  "ActionItemId",
+  "EventId",
+  "Task",
+  "PICEmpId",
+  "PICName",
+  "DueDate",
+  "Status"
+];
+
 function doGet() {
   return HtmlService.createHtmlOutputFromFile("Index")
     .setTitle("OHS Roster, Leave & Event Portal")
@@ -3488,6 +3525,462 @@ function sortEventByDate_(a, b) {
   );
 }
 
+/* =========================================================
+ * ABSENSI ONLINE (QR CHECK-IN) & NOTULENSI EVENT
+ * ========================================================= */
+
+function findEventById_(eventId) {
+  const id = String(eventId || "").trim();
+
+  return getEvents_().find(function (event) {
+    return String(event.EventId) === id;
+  });
+}
+
+function findRowIndexByValue_(sheet, columnName, value) {
+  if (sheet.getLastRow() < 2) {
+    return -1;
+  }
+
+  const headers = sheet
+    .getRange(1, 1, 1, sheet.getLastColumn())
+    .getValues()[0]
+    .map(function (header) {
+      return String(header || "").trim();
+    });
+
+  const columnIndex = headers.indexOf(columnName);
+
+  if (columnIndex < 0) {
+    return -1;
+  }
+
+  const values = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn())
+    .getValues();
+
+  for (let index = 0; index < values.length; index++) {
+    if (String(values[index][columnIndex] || "").trim() === String(value)) {
+      return index + 2;
+    }
+  }
+
+  return -1;
+}
+
+function getEventAttendanceRows_(eventId) {
+  const spreadsheet = getSpreadsheet_();
+  const sheet = spreadsheet.getSheetByName(SHEET_EVENT_ATTENDANCE);
+
+  if (!sheet) {
+    return [];
+  }
+
+  const table = readTable_(sheet);
+  const head = table.head;
+
+  if (!head.length) {
+    return [];
+  }
+
+  const index = headerIndexMap_(head);
+  const id = String(eventId || "").trim();
+
+  return table.rows
+    .map(function (row) {
+      return {
+        AttendanceId: getCellString_(row, index.AttendanceId),
+        EventId: getCellString_(row, index.EventId),
+        EmpId: getCellString_(row, index.EmpId),
+        EmpName: getCellString_(row, index.EmpName),
+        Team: getCellString_(row, index.Team),
+        Position: getCellString_(row, index.Position),
+        SiteDedicated: getCellString_(row, index.SiteDedicated),
+        CheckInAt:
+          index.CheckInAt >= 0 ? normalizeDateTimeCell_(row[index.CheckInAt]) : ""
+      };
+    })
+    .filter(function (row) {
+      return row.EventId && row.EventId === id;
+    })
+    .sort(function (a, b) {
+      return String(a.CheckInAt || "").localeCompare(String(b.CheckInAt || ""));
+    });
+}
+
+function getEventActionItemRows_(eventId) {
+  const spreadsheet = getSpreadsheet_();
+  const sheet = spreadsheet.getSheetByName(SHEET_EVENT_ACTION_ITEMS);
+
+  if (!sheet) {
+    return [];
+  }
+
+  const table = readTable_(sheet);
+  const head = table.head;
+
+  if (!head.length) {
+    return [];
+  }
+
+  const index = headerIndexMap_(head);
+  const id = String(eventId || "").trim();
+
+  return table.rows
+    .map(function (row) {
+      return {
+        ActionItemId: getCellString_(row, index.ActionItemId),
+        EventId: getCellString_(row, index.EventId),
+        Task: getCellString_(row, index.Task),
+        PICEmpId: getCellString_(row, index.PICEmpId),
+        PICName: getCellString_(row, index.PICName),
+        DueDate: index.DueDate >= 0 ? normalizeDateCell_(row[index.DueDate]) : "",
+        Status: getCellString_(row, index.Status) || "Open"
+      };
+    })
+    .filter(function (row) {
+      return row.EventId && row.EventId === id;
+    });
+}
+
+/**
+ * Data untuk halaman check-in publik (hasil scan QR). Tidak butuh login --
+ * siapa pun yang membuka link/QR bisa memuat data ini.
+ */
+function getEventCheckinInfo(eventId) {
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan atau QR sudah tidak berlaku.");
+  }
+
+  const employees = getEmployees_()
+    .slice()
+    .sort(function (a, b) {
+      return String(a.EmpName || "").localeCompare(String(b.EmpName || ""));
+    });
+
+  const attendance = getEventAttendanceRows_(event.EventId);
+
+  return {
+    event: {
+      EventId: event.EventId,
+      EventName: event.EventName,
+      Description: event.Description,
+      Where: event.Where,
+      EventDate: event.EventDate
+    },
+    employees: employees.map(function (employee) {
+      return {
+        EmpId: employee.EmpId,
+        EmpName: employee.EmpName,
+        Team: employee.Team,
+        Position: employee.Position,
+        SiteDedicated: employee.SiteDedicated
+      };
+    }),
+    checkedInEmpIds: attendance.map(function (row) {
+      return row.EmpId;
+    }),
+    attendanceCount: attendance.length
+  };
+}
+
+/**
+ * Submit absensi dari halaman check-in publik. Satu EmpId hanya bisa
+ * absen sekali per event -- percobaan kedua dikembalikan sebagai info,
+ * bukan error, supaya tidak membingungkan peserta yang scan ulang.
+ */
+function submitEventCheckin(payload) {
+  payload = payload || {};
+
+  const eventId = String(payload.EventId || "").trim();
+  const empId = String(payload.EmpId || "").trim();
+
+  if (!eventId) {
+    throw new Error("Event ID wajib diisi.");
+  }
+
+  if (!empId) {
+    throw new Error("Silakan pilih nama Anda terlebih dahulu.");
+  }
+
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan atau QR sudah tidak berlaku.");
+  }
+
+  const employeeMap = objectBy_(getEmployees_(), "EmpId");
+  const employee = employeeMap[empId];
+
+  if (!employee) {
+    throw new Error("Nama tidak ditemukan pada data Employees.");
+  }
+
+  const sheet = getOrCreateSheet_(SHEET_EVENT_ATTENDANCE, EVENT_ATTENDANCE_HEADERS);
+  const lock = LockService.getScriptLock();
+
+  lock.waitLock(30000);
+
+  try {
+    ensureHeaders_(sheet, EVENT_ATTENDANCE_HEADERS);
+
+    const existing = getEventAttendanceRows_(eventId).find(function (row) {
+      return row.EmpId === empId;
+    });
+
+    if (existing) {
+      return {
+        alreadyCheckedIn: true,
+        empName: employee.EmpName,
+        checkInAt: existing.CheckInAt
+      };
+    }
+
+    const now = new Date();
+    const attendanceId = "ATT-" + Utilities.getUuid().slice(0, 8).toUpperCase();
+
+    appendObjectRow_(sheet, EVENT_ATTENDANCE_HEADERS, {
+      Timestamp: now,
+      AttendanceId: attendanceId,
+      EventId: eventId,
+      EmpId: employee.EmpId,
+      EmpName: employee.EmpName,
+      Team: employee.Team,
+      Position: employee.Position,
+      SiteDedicated: employee.SiteDedicated,
+      CheckInAt: now
+    });
+
+    return {
+      alreadyCheckedIn: false,
+      empName: employee.EmpName,
+      checkInAt: normalizeDateTimeCell_(now)
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * Ringkasan daftar hadir untuk admin (Event Maker), bukan halaman publik.
+ */
+function getEventAttendanceSummary(eventId) {
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan.");
+  }
+
+  const attendance = getEventAttendanceRows_(event.EventId);
+
+  return {
+    event: {
+      EventId: event.EventId,
+      EventName: event.EventName,
+      EventDate: event.EventDate
+    },
+    attendance: attendance,
+    attendanceCount: attendance.length
+  };
+}
+
+/**
+ * Notulensi (ringkasan rapat + action item) untuk satu event.
+ */
+function getEventMinutes(eventId) {
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan.");
+  }
+
+  const spreadsheet = getSpreadsheet_();
+  const sheet = spreadsheet.getSheetByName(SHEET_EVENT_MINUTES);
+
+  let summary = "";
+  let updatedAt = "";
+  let updatedByName = "";
+
+  if (sheet) {
+    const table = readTable_(sheet);
+    const index = headerIndexMap_(table.head);
+
+    const row = table.rows.find(function (candidate) {
+      return getCellString_(candidate, index.EventId) === event.EventId;
+    });
+
+    if (row) {
+      summary = getCellString_(row, index.Summary);
+      updatedAt =
+        index.UpdatedAt >= 0 ? normalizeDateTimeCell_(row[index.UpdatedAt]) : "";
+      updatedByName = getCellString_(row, index.UpdatedByName);
+    }
+  }
+
+  return {
+    eventId: event.EventId,
+    eventName: event.EventName,
+    summary: summary,
+    updatedAt: updatedAt,
+    updatedByName: updatedByName,
+    actionItems: getEventActionItemRows_(event.EventId)
+  };
+}
+
+/**
+ * Simpan / perbarui ringkasan notulensi (bukan action item -- itu terpisah,
+ * lihat addEventActionItem / updateEventActionItemStatus).
+ */
+function saveEventMinutes(payload) {
+  payload = payload || {};
+
+  const eventId = String(payload.EventId || "").trim();
+  const summary = String(payload.Summary || "").trim();
+
+  if (!eventId) {
+    throw new Error("Event ID wajib diisi.");
+  }
+
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan.");
+  }
+
+  const updatedByEmpId = String(payload.UpdatedByEmpId || "").trim();
+  const employeeMap = objectBy_(getEmployees_(), "EmpId");
+  const updatedByEmployee = employeeMap[updatedByEmpId] || {};
+
+  const sheet = getOrCreateSheet_(SHEET_EVENT_MINUTES, EVENT_MINUTES_HEADERS);
+  const lock = LockService.getScriptLock();
+  const now = new Date();
+
+  lock.waitLock(30000);
+
+  try {
+    ensureHeaders_(sheet, EVENT_MINUTES_HEADERS);
+
+    const targetRow = findRowIndexByValue_(sheet, "EventId", eventId);
+
+    const rowValues = {
+      Summary: summary,
+      UpdatedAt: now,
+      UpdatedByEmpId: updatedByEmpId,
+      UpdatedByName: updatedByEmployee.EmpName || ""
+    };
+
+    if (targetRow > 0) {
+      setObjectRowValues_(sheet, targetRow, rowValues);
+    } else {
+      appendObjectRow_(
+        sheet,
+        EVENT_MINUTES_HEADERS,
+        Object.assign({ Timestamp: now, EventId: eventId }, rowValues)
+      );
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  return getEventMinutes(eventId);
+}
+
+/**
+ * Tambah satu action item baru pada notulensi event.
+ */
+function addEventActionItem(payload) {
+  payload = payload || {};
+
+  const eventId = String(payload.EventId || "").trim();
+  const task = String(payload.Task || "").trim();
+  const picEmployeeId = String(payload.PICEmpId || "").trim();
+  const dueDateISO = String(payload.DueDate || "").trim();
+
+  if (!eventId) {
+    throw new Error("Event ID wajib diisi.");
+  }
+
+  if (!task) {
+    throw new Error("Action item wajib diisi.");
+  }
+
+  const event = findEventById_(eventId);
+
+  if (!event) {
+    throw new Error("Event tidak ditemukan.");
+  }
+
+  const employeeMap = objectBy_(getEmployees_(), "EmpId");
+  const picEmployee = employeeMap[picEmployeeId] || {};
+
+  const sheet = getOrCreateSheet_(SHEET_EVENT_ACTION_ITEMS, EVENT_ACTION_ITEM_HEADERS);
+  const lock = LockService.getScriptLock();
+
+  lock.waitLock(30000);
+
+  try {
+    ensureHeaders_(sheet, EVENT_ACTION_ITEM_HEADERS);
+
+    const actionItemId = "AI-" + Utilities.getUuid().slice(0, 8).toUpperCase();
+
+    appendObjectRow_(sheet, EVENT_ACTION_ITEM_HEADERS, {
+      Timestamp: new Date(),
+      ActionItemId: actionItemId,
+      EventId: eventId,
+      Task: task,
+      PICEmpId: picEmployeeId,
+      PICName: picEmployee.EmpName || "",
+      DueDate: dueDateISO,
+      Status: "Open"
+    });
+  } finally {
+    lock.releaseLock();
+  }
+
+  return getEventMinutes(eventId);
+}
+
+/**
+ * Tandai action item selesai / buka kembali.
+ */
+function updateEventActionItemStatus(payload) {
+  payload = payload || {};
+
+  const actionItemId = String(payload.ActionItemId || "").trim();
+  const status = String(payload.Status || "").trim();
+  const eventId = String(payload.EventId || "").trim();
+
+  if (!actionItemId) {
+    throw new Error("Action Item ID wajib diisi.");
+  }
+
+  if (status !== "Open" && status !== "Done") {
+    throw new Error('Status wajib "Open" atau "Done".');
+  }
+
+  const sheet = getOrCreateSheet_(SHEET_EVENT_ACTION_ITEMS, EVENT_ACTION_ITEM_HEADERS);
+  const lock = LockService.getScriptLock();
+
+  lock.waitLock(30000);
+
+  try {
+    ensureHeaders_(sheet, EVENT_ACTION_ITEM_HEADERS);
+
+    const targetRow = findRowIndexByValue_(sheet, "ActionItemId", actionItemId);
+
+    if (targetRow < 0) {
+      throw new Error("Action item tidak ditemukan.");
+    }
+
+    setObjectRowValues_(sheet, targetRow, { Status: status });
+  } finally {
+    lock.releaseLock();
+  }
+
+  return getEventMinutes(eventId);
+}
 
 function enrichTrackerSubTask_(task, employeeMap) {
   const picEmployee = employeeMap[String(task.PICEmpId)] || {};

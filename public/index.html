@@ -2035,6 +2035,64 @@
       white-space: pre-wrap;
     }
 
+    .event-attendance-list,
+    .event-action-items-list {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+    }
+
+    .event-attendance-row,
+    .action-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12.5px;
+    }
+
+    .event-attendance-row:last-child,
+    .action-item-row:last-child {
+      border-bottom: 0;
+    }
+
+    .action-item-row .action-item-task {
+      font-weight: 700;
+    }
+
+    .action-item-row .action-item-meta {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+
+    .action-item-status-btn {
+      flex-shrink: 0;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .action-item-status-btn.done {
+      background: #ecfdf5;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .empty-hint-row {
+      padding: 14px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .popup-section-title {
       margin: 0 0 10px;
       font-size: 13px;
@@ -3131,6 +3189,92 @@
     </div>
   </div>
 
+  <div id="eventQrModal" class="modal hide">
+    <div class="modal-card small">
+      <div class="modal-head">
+        <div>
+          <h2 id="eventQrTitle" class="card-title" style="font-size:17px;">QR Absensi Event</h2>
+          <div id="eventQrMeta" class="hint"></div>
+        </div>
+        <button id="btnCloseEventQr" class="btn modal-close" type="button">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div style="text-align:center;">
+          <img id="eventQrImage" src="" alt="QR Absensi" style="width:220px;height:220px;border:1px solid var(--line);border-radius:11px;padding:8px;background:#fff;">
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label for="eventCheckinLink">Link Absensi</label>
+          <div style="display:flex;gap:8px;">
+            <input id="eventCheckinLink" type="text" readonly style="flex:1;">
+            <button id="btnCopyEventCheckinLink" class="btn" type="button">Copy</button>
+          </div>
+          <div class="hint">Bagikan link atau tunjukkan QR ini supaya peserta bisa absen mandiri lewat HP.</div>
+        </div>
+
+        <div class="field" style="margin-top:14px;">
+          <label>Daftar Hadir (<span id="eventQrAttendanceCount">0</span>)</label>
+          <div id="eventQrAttendanceList" class="event-attendance-list"></div>
+        </div>
+
+        <div class="actions">
+          <button id="btnRefreshEventQrAttendance" class="btn" type="button">Refresh Daftar Hadir</button>
+        </div>
+
+        <div id="eventQrMessage" class="message hide"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="eventMinutesModal" class="modal hide">
+    <div class="modal-card small">
+      <div class="modal-head">
+        <div>
+          <h2 id="eventMinutesTitle" class="card-title" style="font-size:17px;">Notulensi Event</h2>
+          <div id="eventMinutesMeta" class="hint"></div>
+        </div>
+        <button id="btnCloseEventMinutes" class="btn modal-close" type="button">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field">
+          <label for="eventMinutesText">Ringkasan / Notulen</label>
+          <textarea id="eventMinutesText" placeholder="Tuliskan ringkasan rapat / event di sini..."></textarea>
+          <div id="eventMinutesUpdatedInfo" class="hint"></div>
+        </div>
+
+        <div class="field" style="margin-top:10px;">
+          <label for="eventMinutesUpdatedBy">Diperbarui Oleh</label>
+          <select id="eventMinutesUpdatedBy"></select>
+        </div>
+
+        <div class="actions">
+          <button id="btnSaveEventMinutes" class="btn primary" type="button">Simpan Notulensi</button>
+        </div>
+
+        <div id="eventMinutesMessage" class="message hide"></div>
+
+        <div class="field" style="margin-top:18px;">
+          <label>Action Items</label>
+          <div id="eventActionItemsList" class="event-action-items-list"></div>
+        </div>
+
+        <div class="field" style="margin-top:10px;">
+          <label for="newActionItemTask">Tambah Action Item</label>
+          <input id="newActionItemTask" type="text" placeholder="Deskripsi tugas...">
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <select id="newActionItemPIC" style="flex:1;"></select>
+            <input id="newActionItemDueDate" type="date" style="width:150px;">
+          </div>
+          <button id="btnAddActionItem" class="btn" type="button" style="margin-top:8px;">+ Tambah Action Item</button>
+        </div>
+
+        <div id="eventActionItemMessage" class="message hide"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="trackerCreateModal" class="modal hide">
     <div class="modal-card wide">
       <div class="modal-head">
@@ -4148,6 +4292,10 @@
                 escapeHtml(item.EventId) + '">Edit</button>' +
               '<button class="btn event-readiness-button" type="button" data-event-id="' +
                 escapeHtml(item.EventId) + '">Update Kesiapan</button>' +
+              '<button class="btn event-qr-button" type="button" data-event-id="' +
+                escapeHtml(item.EventId) + '">QR Absensi</button>' +
+              '<button class="btn event-minutes-button" type="button" data-event-id="' +
+                escapeHtml(item.EventId) + '">Notulensi</button>' +
             '</div></td>' +
           '</tr>'
         );
@@ -4162,6 +4310,18 @@
       body.querySelectorAll(".event-readiness-button").forEach(function (button) {
         button.addEventListener("click", function () {
           openEventReadiness(button.getAttribute("data-event-id"));
+        });
+      });
+
+      body.querySelectorAll(".event-qr-button").forEach(function (button) {
+        button.addEventListener("click", function () {
+          openEventQr(button.getAttribute("data-event-id"));
+        });
+      });
+
+      body.querySelectorAll(".event-minutes-button").forEach(function (button) {
+        button.addEventListener("click", function () {
+          openEventMinutes(button.getAttribute("data-event-id"));
         });
       });
     }
@@ -6494,6 +6654,270 @@
         .updateEventReadiness(payload);
     }
 
+    function buildEventCheckinUrl(eventId) {
+      return window.location.origin + "/checkin.html?eventId=" + encodeURIComponent(eventId);
+    }
+
+    function openEventQr(eventId) {
+      const event = EVENT_CACHE[String(eventId)];
+
+      if (!event) {
+        alert("Data event tidak ditemukan. Silakan Refresh terlebih dahulu.");
+        return;
+      }
+
+      STATE.activeQrEventId = String(event.EventId);
+
+      const checkinUrl = buildEventCheckinUrl(event.EventId);
+
+      $("eventQrTitle").textContent = "QR Absensi - " + event.EventName;
+      $("eventQrMeta").textContent =
+        event.EventId + " • " + formatDate(event.EventDate) + " • " + (event.Where || "-");
+      $("eventCheckinLink").value = checkinUrl;
+      $("eventQrImage").src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
+        encodeURIComponent(checkinUrl);
+      hideMessage("eventQrMessage");
+      $("eventQrModal").classList.remove("hide");
+      loadEventQrAttendance();
+    }
+
+    function closeEventQr() {
+      STATE.activeQrEventId = "";
+      $("eventQrModal").classList.add("hide");
+    }
+
+    function loadEventQrAttendance() {
+      const eventId = STATE.activeQrEventId;
+      if (!eventId) return;
+
+      $("eventQrAttendanceList").innerHTML =
+        '<div class="empty-hint-row">Memuat daftar hadir...</div>';
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          $("eventQrAttendanceCount").textContent = result.attendanceCount || 0;
+
+          const rows = result.attendance || [];
+
+          if (!rows.length) {
+            $("eventQrAttendanceList").innerHTML =
+              '<div class="empty-hint-row">Belum ada yang absen.</div>';
+            return;
+          }
+
+          $("eventQrAttendanceList").innerHTML = rows.map(function (row) {
+            return (
+              '<div class="event-attendance-row">' +
+                '<div>' +
+                  '<div><b>' + escapeHtml(row.EmpName || row.EmpId || "-") + '</b></div>' +
+                  '<div class="action-item-meta">' +
+                    escapeHtml([row.Position, row.Team, row.SiteDedicated].filter(Boolean).join(" • ")) +
+                  '</div>' +
+                '</div>' +
+                '<div>' + escapeHtml(row.CheckInAt || "-") + '</div>' +
+              '</div>'
+            );
+          }).join("");
+        })
+        .withFailureHandler(function (error) {
+          $("eventQrAttendanceList").innerHTML = "";
+          setMessage("eventQrMessage", "Gagal memuat daftar hadir: " + error.message, "error");
+        })
+        .getEventAttendanceSummary(eventId);
+    }
+
+    function copyEventCheckinLink() {
+      const input = $("eventCheckinLink");
+      input.select();
+      input.setSelectionRange(0, input.value.length);
+
+      const fallbackCopy = function () {
+        try {
+          document.execCommand("copy");
+          setMessage("eventQrMessage", "Link berhasil disalin.", "success");
+        } catch (error) {
+          setMessage("eventQrMessage", "Gagal menyalin link, silakan copy manual.", "error");
+        }
+      };
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(input.value)
+          .then(function () {
+            setMessage("eventQrMessage", "Link berhasil disalin.", "success");
+          })
+          .catch(fallbackCopy);
+      } else {
+        fallbackCopy();
+      }
+    }
+
+    function renderActionItemsList(items) {
+      if (!items || !items.length) {
+        $("eventActionItemsList").innerHTML =
+          '<div class="empty-hint-row">Belum ada action item.</div>';
+        return;
+      }
+
+      $("eventActionItemsList").innerHTML = items.map(function (item) {
+        const isDone = item.Status === "Done";
+
+        return (
+          '<div class="action-item-row">' +
+            '<div>' +
+              '<div class="action-item-task">' + escapeHtml(item.Task || "-") + '</div>' +
+              '<div class="action-item-meta">' +
+                escapeHtml(item.PICName || item.PICEmpId || "Belum ada PIC") +
+                (item.DueDate ? " • Due " + escapeHtml(formatDate(item.DueDate)) : "") +
+              '</div>' +
+            '</div>' +
+            '<button class="action-item-status-btn' + (isDone ? ' done' : '') +
+              '" type="button" data-action-item-id="' + escapeHtml(item.ActionItemId) +
+              '" data-current-status="' + escapeHtml(item.Status) + '">' +
+              (isDone ? "Selesai" : "Open") +
+            '</button>' +
+          '</div>'
+        );
+      }).join("");
+
+      $("eventActionItemsList").querySelectorAll(".action-item-status-btn").forEach(function (button) {
+        button.addEventListener("click", function () {
+          const nextStatus = button.getAttribute("data-current-status") === "Done" ? "Open" : "Done";
+          toggleActionItemStatus(button.getAttribute("data-action-item-id"), nextStatus);
+        });
+      });
+    }
+
+    function openEventMinutes(eventId) {
+      const event = EVENT_CACHE[String(eventId)];
+
+      if (!event) {
+        alert("Data event tidak ditemukan. Silakan Refresh terlebih dahulu.");
+        return;
+      }
+
+      STATE.activeMinutesEventId = String(event.EventId);
+
+      $("eventMinutesTitle").textContent = "Notulensi - " + event.EventName;
+      $("eventMinutesMeta").textContent =
+        event.EventId + " • " + formatDate(event.EventDate) + " • " + (event.Where || "-");
+      $("eventMinutesText").value = "";
+      $("eventMinutesUpdatedInfo").textContent = "";
+      hideMessage("eventMinutesMessage");
+      hideMessage("eventActionItemMessage");
+      $("newActionItemTask").value = "";
+      $("newActionItemDueDate").value = "";
+
+      const employees = (INIT && INIT.employees) || [];
+      const empOptions = '<option value="">-- pilih --</option>' + employees.map(employeeOption).join("");
+      $("eventMinutesUpdatedBy").innerHTML = empOptions;
+      $("newActionItemPIC").innerHTML = '<option value="">-- PIC (opsional) --</option>' + employees.map(employeeOption).join("");
+
+      $("eventActionItemsList").innerHTML = '<div class="empty-hint-row">Memuat...</div>';
+      $("eventMinutesModal").classList.remove("hide");
+
+      loadEventMinutes();
+    }
+
+    function closeEventMinutes() {
+      STATE.activeMinutesEventId = "";
+      $("eventMinutesModal").classList.add("hide");
+    }
+
+    function loadEventMinutes() {
+      const eventId = STATE.activeMinutesEventId;
+      if (!eventId) return;
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          $("eventMinutesText").value = result.summary || "";
+          $("eventMinutesUpdatedInfo").textContent = result.updatedAt
+            ? "Terakhir diperbarui " + result.updatedAt + " oleh " + (result.updatedByName || "-")
+            : "Belum pernah disimpan.";
+          renderActionItemsList(result.actionItems);
+        })
+        .withFailureHandler(function (error) {
+          setMessage("eventMinutesMessage", "Gagal memuat notulensi: " + error.message, "error");
+        })
+        .getEventMinutes(eventId);
+    }
+
+    function saveEventMinutesHandler() {
+      const eventId = STATE.activeMinutesEventId;
+      const payload = {
+        EventId: eventId,
+        Summary: $("eventMinutesText").value,
+        UpdatedByEmpId: $("eventMinutesUpdatedBy").value
+      };
+
+      $("btnSaveEventMinutes").disabled = true;
+      setMessage("eventMinutesMessage", "Menyimpan notulensi...");
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          $("btnSaveEventMinutes").disabled = false;
+          setMessage("eventMinutesMessage", "Notulensi berhasil disimpan.", "success");
+          $("eventMinutesUpdatedInfo").textContent = result.updatedAt
+            ? "Terakhir diperbarui " + result.updatedAt + " oleh " + (result.updatedByName || "-")
+            : "";
+        })
+        .withFailureHandler(function (error) {
+          $("btnSaveEventMinutes").disabled = false;
+          setMessage("eventMinutesMessage", "Gagal menyimpan notulensi: " + error.message, "error");
+        })
+        .saveEventMinutes(payload);
+    }
+
+    function addActionItemHandler() {
+      const eventId = STATE.activeMinutesEventId;
+      const payload = {
+        EventId: eventId,
+        Task: $("newActionItemTask").value,
+        PICEmpId: $("newActionItemPIC").value,
+        DueDate: $("newActionItemDueDate").value
+      };
+
+      if (!payload.Task.trim()) {
+        setMessage("eventActionItemMessage", "Action item wajib diisi.", "error");
+        return;
+      }
+
+      $("btnAddActionItem").disabled = true;
+      setMessage("eventActionItemMessage", "Menambahkan action item...");
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          $("btnAddActionItem").disabled = false;
+          hideMessage("eventActionItemMessage");
+          $("newActionItemTask").value = "";
+          $("newActionItemPIC").value = "";
+          $("newActionItemDueDate").value = "";
+          renderActionItemsList(result.actionItems);
+        })
+        .withFailureHandler(function (error) {
+          $("btnAddActionItem").disabled = false;
+          setMessage("eventActionItemMessage", "Gagal menambahkan action item: " + error.message, "error");
+        })
+        .addEventActionItem(payload);
+    }
+
+    function toggleActionItemStatus(actionItemId, nextStatus) {
+      const eventId = STATE.activeMinutesEventId;
+
+      google.script.run
+        .withSuccessHandler(function (result) {
+          renderActionItemsList(result.actionItems);
+        })
+        .withFailureHandler(function (error) {
+          setMessage("eventActionItemMessage", "Gagal memperbarui status: " + error.message, "error");
+        })
+        .updateEventActionItemStatus({
+          ActionItemId: actionItemId,
+          Status: nextStatus,
+          EventId: eventId
+        });
+    }
+
     function loadEventMaker() {
       $("btnRefreshEvent").disabled = true;
 
@@ -6925,6 +7349,14 @@
     $("btnCloseEventReadiness").onclick = closeEventReadiness;
     $("btnCancelEventReadiness").onclick = closeEventReadiness;
     $("btnSaveEventReadiness").onclick = saveEventReadiness;
+
+    $("btnCloseEventQr").onclick = closeEventQr;
+    $("btnCopyEventCheckinLink").onclick = copyEventCheckinLink;
+    $("btnRefreshEventQrAttendance").onclick = loadEventQrAttendance;
+
+    $("btnCloseEventMinutes").onclick = closeEventMinutes;
+    $("btnSaveEventMinutes").onclick = saveEventMinutesHandler;
+    $("btnAddActionItem").onclick = addActionItemHandler;
 
     $("eventTeamFilter").onchange = function (event) {
       STATE.eventTeam = event.target.value;
