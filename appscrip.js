@@ -5194,19 +5194,49 @@ function getHseApiConfig_() {
   };
 }
 
-function fetchHseEmployees_() {
+/**
+ * Daftar seluruh company (PT Berau Coal + kontraktor/mitra kerja) di
+ * sistem HSE. Dipakai supaya sinkronisasi karyawan mencakup semua
+ * perusahaan, bukan cuma PT Berau Coal sendiri.
+ */
+function fetchHseCompanies_() {
   const config = getHseApiConfig_();
 
-  if (!config.apiKey) {
+  const url = config.apiBase + "/sid2/api/ftwApi/getCompany?page=1&size=1000";
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "get",
+    headers: { "x-api-key": config.apiKey },
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
     throw new Error(
-      "HSE_API_KEY belum dikonfigurasi. Set environment variable HSE_API_KEY di Vercel."
+      "HSE API error " + response.getResponseCode() + " saat mengambil daftar company: " +
+      String(response.getContentText() || "").slice(0, 300)
     );
   }
 
+  const data = JSON.parse(response.getContentText());
+
+  return (data.results || [])
+    .map(function (company) {
+      return company.id || company.companyId;
+    })
+    .filter(Boolean);
+}
+
+/**
+ * Ambil karyawan AKTIF untuk satu company. Retry sekali kalau kena
+ * error (server HSE kadang 502 sesaat) -- kalau tetap gagal, lempar
+ * error supaya company ini ditandai gagal oleh pemanggil (bukan
+ * menghentikan seluruh sync).
+ */
+function fetchHseEmployeesForCompanyOnce_(companyId, config) {
   const url =
     config.apiBase +
     "/sid2/api/ftwApi/getEmployee?companyId=" +
-    encodeURIComponent(config.companyId) +
+    encodeURIComponent(companyId) +
     "&page=1&size=30000";
 
   const response = UrlFetchApp.fetch(url, {
@@ -5215,13 +5245,8 @@ function fetchHseEmployees_() {
     muteHttpExceptions: true
   });
 
-  const responseCode = response.getResponseCode();
-
-  if (responseCode !== 200) {
-    throw new Error(
-      "HSE API error " + responseCode + ": " +
-      String(response.getContentText() || "").slice(0, 300)
-    );
+  if (response.getResponseCode() !== 200) {
+    throw new Error("HTTP " + response.getResponseCode());
   }
 
   const data = JSON.parse(response.getContentText());
@@ -5231,14 +5256,73 @@ function fetchHseEmployees_() {
   });
 }
 
+function fetchHseEmployeesForCompany_(companyId, config) {
+  try {
+    return fetchHseEmployeesForCompanyOnce_(companyId, config);
+  } catch (firstError) {
+    return fetchHseEmployeesForCompanyOnce_(companyId, config);
+  }
+}
+
 /**
- * Mengambil data karyawan dari API HSE lalu menimpa sheet Employees.
- * Header kolom mengikuti header yang sudah ada di sheet (kalau sheet
- * sudah ada) supaya variasi nama kolom lama (mis. "Site_Dedicated")
- * tidak dianggap kolom baru.
+ * Ambil karyawan AKTIF dari SEMUA company (bukan cuma PT Berau Coal),
+ * beberapa company sekaligus per batch supaya tidak membanjiri server
+ * HSE. Company yang tetap gagal setelah retry dilewati (dicatat di
+ * failedCompanyIds), tidak menggagalkan seluruh sync.
+ */
+function fetchHseEmployees_() {
+  const config = getHseApiConfig_();
+
+  if (!config.apiKey) {
+    throw new Error(
+      "HSE_API_KEY belum dikonfigurasi. Set environment variable HSE_API_KEY di Vercel."
+    );
+  }
+
+  const companyIds = fetchHseCompanies_();
+  const concurrency = 8;
+  const employees = [];
+  const failedCompanyIds = [];
+
+  for (let start = 0; start < companyIds.length; start += concurrency) {
+    const chunk = companyIds.slice(start, start + concurrency);
+
+    const chunkResults = await Promise.all(
+      chunk.map(async function (companyId) {
+        try {
+          const list = await fetchHseEmployeesForCompany_(companyId, config);
+          return { companyId: companyId, ok: true, employees: list };
+        } catch (fetchError) {
+          return { companyId: companyId, ok: false, employees: [] };
+        }
+      })
+    );
+
+    chunkResults.forEach(function (result) {
+      if (result.ok) {
+        employees.push.apply(employees, result.employees);
+      } else {
+        failedCompanyIds.push(result.companyId);
+      }
+    });
+  }
+
+  return {
+    employees: employees,
+    totalCompanies: companyIds.length,
+    failedCompanyIds: failedCompanyIds
+  };
+}
+
+/**
+ * Mengambil data karyawan dari API HSE (semua company) lalu menimpa
+ * sheet Employees. Header kolom mengikuti header yang sudah ada di
+ * sheet (kalau sheet sudah ada) supaya variasi nama kolom lama (mis.
+ * "Site_Dedicated") tidak dianggap kolom baru.
  */
 function syncEmployeesFromHse_() {
-  const hseEmployees = fetchHseEmployees_();
+  const fetchResult = fetchHseEmployees_();
+  const hseEmployees = fetchResult.employees;
 
   let headers = EMPLOYEE_SYNC_HEADERS;
 
@@ -5265,6 +5349,8 @@ function syncEmployeesFromHse_() {
 
   const sheet = getOrCreateSheet_(SHEET_EMPLOYEES, headers);
 
+  const seenEmpIds = {};
+
   const rows = hseEmployees
     .map(function (item) {
       const row = {
@@ -5279,7 +5365,16 @@ function syncEmployeesFromHse_() {
       return row;
     })
     .filter(function (row) {
-      return row.EmpId && row.EmpName;
+      if (!row.EmpId || !row.EmpName) {
+        return false;
+      }
+      // Karyawan bisa muncul di lebih dari satu company (mis. dipekerjakan
+      // lintas entitas) -- ambil kemunculan pertama saja.
+      if (seenEmpIds[row.EmpId]) {
+        return false;
+      }
+      seenEmpIds[row.EmpId] = true;
+      return true;
     });
 
   const lock = LockService.getScriptLock();
@@ -5292,7 +5387,10 @@ function syncEmployeesFromHse_() {
   }
 
   return {
-    syncedCount: rows.length
+    syncedCount: rows.length,
+    totalCompanies: fetchResult.totalCompanies,
+    failedCompanyCount: fetchResult.failedCompanyIds.length,
+    failedCompanyIds: fetchResult.failedCompanyIds
   };
 }
 
@@ -5376,6 +5474,9 @@ function executeHseSync_(settings, syncKey, sourceLabel) {
     return {
       synced: true,
       syncedCount: result.syncedCount,
+      totalCompanies: result.totalCompanies,
+      failedCompanyCount: result.failedCompanyCount,
+      failedCompanyIds: result.failedCompanyIds,
       runAt: startedAtLabel,
       source: sourceLabel
     };
