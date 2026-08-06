@@ -4966,6 +4966,9 @@ function sendOverdueReminderNow() {
 
 function executeOverdueReminderDigest_(settings, scheduleKey, sourceLabel) {
   const startedAt = new Date();
+  // Pra-format ke string sekali di sini -- jangan kirim objek Date mentah ke
+  // writeEmailSchedulerSettings_, pernah menyebabkan "Invalid time value".
+  const startedAtLabel = normalizeDateTimeCell_(startedAt);
 
   try {
     const items = getDueSoonTrackerItems_(OVERDUE_REMINDER_WINDOW_DAYS);
@@ -4983,7 +4986,7 @@ function executeOverdueReminderDigest_(settings, scheduleKey, sourceLabel) {
 
     const updatedSettings = Object.assign({}, settings, {
       OverdueReminderLastKey: scheduleKey || settings.OverdueReminderLastKey || "",
-      OverdueReminderLastRunAt: startedAt,
+      OverdueReminderLastRunAt: startedAtLabel,
       OverdueReminderLastCount: items.length
     });
 
@@ -4994,12 +4997,12 @@ function executeOverdueReminderDigest_(settings, scheduleKey, sourceLabel) {
       itemCount: items.length,
       subject: digest.subject,
       recipients: OVERDUE_REMINDER_RECIPIENTS.join(","),
-      runAt: normalizeDateTimeCell_(startedAt),
+      runAt: startedAtLabel,
       source: sourceLabel
     };
   } catch (error) {
     const failedSettings = Object.assign({}, settings, {
-      OverdueReminderLastRunAt: startedAt,
+      OverdueReminderLastRunAt: startedAtLabel,
       OverdueReminderLastCount: 0
     });
 
@@ -5355,13 +5358,16 @@ function syncHseEmployeesNow() {
 
 function executeHseSync_(settings, syncKey, sourceLabel) {
   const startedAt = new Date();
+  // Pra-format ke string sekali di sini -- jangan kirim objek Date mentah ke
+  // writeEmailSchedulerSettings_, pernah menyebabkan "Invalid time value".
+  const startedAtLabel = normalizeDateTimeCell_(startedAt);
 
   try {
     const result = syncEmployeesFromHse_();
 
     const updatedSettings = Object.assign({}, settings, {
       HseSyncLastKey: syncKey || settings.HseSyncLastKey || "",
-      HseSyncLastRunAt: startedAt,
+      HseSyncLastRunAt: startedAtLabel,
       HseSyncLastCount: result.syncedCount
     });
 
@@ -5370,12 +5376,12 @@ function executeHseSync_(settings, syncKey, sourceLabel) {
     return {
       synced: true,
       syncedCount: result.syncedCount,
-      runAt: normalizeDateTimeCell_(startedAt),
+      runAt: startedAtLabel,
       source: sourceLabel
     };
   } catch (error) {
     const failedSettings = Object.assign({}, settings, {
-      HseSyncLastRunAt: startedAt,
+      HseSyncLastRunAt: startedAtLabel,
       HseSyncLastCount: 0
     });
 
@@ -5386,6 +5392,9 @@ function executeHseSync_(settings, syncKey, sourceLabel) {
 
 function executePortalEmailDigest_(settings, isTest, sourceLabel, scheduledKey) {
   const startedAt = new Date();
+  // Pra-format ke string sekali di sini -- jangan kirim objek Date mentah ke
+  // writeEmailSchedulerSettings_, pernah menyebabkan "Invalid time value".
+  const startedAtLabel = normalizeDateTimeCell_(startedAt);
 
   try {
     const digest = buildPortalEmailDigest_(settings, isTest);
@@ -5409,7 +5418,7 @@ function executePortalEmailDigest_(settings, isTest, sourceLabel, scheduledKey) 
 
     const updatedSettings = Object.assign({}, settings, {
       LastScheduledKey: scheduledKey || settings.LastScheduledKey || "",
-      LastRunAt: startedAt,
+      LastRunAt: startedAtLabel,
       LastRunStatus:
         sourceLabel + " berhasil. " + digest.itemCount + " item dirangkum.",
       LastEmailCount: digest.itemCount
@@ -5422,11 +5431,11 @@ function executePortalEmailDigest_(settings, isTest, sourceLabel, scheduledKey) 
       itemCount: digest.itemCount,
       subject: digest.subject,
       recipients: settings.Recipients,
-      runAt: normalizeDateTimeCell_(startedAt)
+      runAt: startedAtLabel
     };
   } catch (error) {
     const failedSettings = Object.assign({}, settings, {
-      LastRunAt: startedAt,
+      LastRunAt: startedAtLabel,
       LastRunStatus: sourceLabel + " gagal: " + error.message,
       LastEmailCount: 0
     });
