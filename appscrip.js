@@ -223,6 +223,7 @@ const EMPLOYEE_SYNC_HEADERS = [
   "Position",
   "Team",
   "SiteDedicated",
+  "Company",
   "PhotoUrl"
 ];
 
@@ -3022,6 +3023,7 @@ function getEmployees_() {
     "Site Dedicated"
   ]);
   const indexPhoto = head.indexOf("PhotoUrl");
+  const indexCompany = head.indexOf("Company");
 
   if (indexEmployeeId < 0 || indexEmployeeName < 0) {
     throw new Error('Employees wajib memiliki kolom "EmpId" dan "EmpName".');
@@ -3036,6 +3038,7 @@ function getEmployees_() {
         Position: getCellString_(row, indexPosition),
         Team: getCellString_(row, indexTeam),
         SiteDedicated: getCellString_(row, indexSite),
+        Company: getCellString_(row, indexCompany),
         PhotoUrl: getCellString_(row, indexPhoto)
       };
     })
@@ -3063,7 +3066,9 @@ function getEmployeeSearchResults(request) {
   const matches = getEmployees_().filter(function (employee) {
     return (
       (employee.EmpName || "").toLowerCase().indexOf(text) >= 0 ||
-      (employee.EmpId || "").toLowerCase().indexOf(text) >= 0
+      (employee.EmpId || "").toLowerCase().indexOf(text) >= 0 ||
+      (employee.Company || "").toLowerCase().indexOf(text) >= 0 ||
+      (employee.Team || "").toLowerCase().indexOf(text) >= 0
     );
   });
 
@@ -3577,7 +3582,8 @@ function enrichEvent_(event, employeeMap) {
     PICTeam: event.PICTeam || picEmployee.Team || "",
     PICPosition: event.PICPosition || picEmployee.Position || "",
     PICSiteDedicated:
-      event.PICSiteDedicated || picEmployee.SiteDedicated || ""
+      event.PICSiteDedicated || picEmployee.SiteDedicated || "",
+    PICCompany: event.PICCompany || picEmployee.Company || ""
   });
 }
 
@@ -4055,6 +4061,7 @@ function enrichTrackerSubTask_(task, employeeMap) {
     PICPosition: task.PICPosition || picEmployee.Position || "",
     PICSiteDedicated:
       task.PICSiteDedicated || picEmployee.SiteDedicated || "",
+    PICCompany: task.PICCompany || picEmployee.Company || "",
     Department: task.Department || task.PICTeam || picEmployee.Team || "",
     Site: task.Site || task.PICSiteDedicated || picEmployee.SiteDedicated || "",
     CurrentPercentComplete: percentComplete,
@@ -4239,6 +4246,8 @@ function enrichTracker_(tracker, employeeMap) {
       tracker.ProjectLeaderPosition || leaderEmployee.Position || "",
     ProjectLeaderSiteDedicated:
       tracker.ProjectLeaderSiteDedicated || leaderEmployee.SiteDedicated || "",
+    ProjectLeaderCompany:
+      tracker.ProjectLeaderCompany || leaderEmployee.Company || "",
     Department:
       tracker.Department || tracker.ProjectLeaderTeam || leaderEmployee.Team || "",
     Site:
@@ -5379,6 +5388,10 @@ function syncEmployeesFromHse_() {
     headers = headers.concat([siteHeaderName]);
   }
 
+  if (headers.indexOf("Company") < 0) {
+    headers = headers.concat(["Company"]);
+  }
+
   const sheet = getOrCreateSheet_(SHEET_EMPLOYEES, headers);
 
   const seenEmpIds = {};
@@ -5391,6 +5404,7 @@ function syncEmployeesFromHse_() {
         EmpName: String(item.name || "").trim(),
         Position: String(item.structuralPosition || "").trim(),
         Team: String(item.departmentName || "").trim(),
+        Company: String(item.companyName || "").trim(),
         PhotoUrl: ""
       };
       row[siteHeaderName] = String(item.dedicatedSite || "").trim();

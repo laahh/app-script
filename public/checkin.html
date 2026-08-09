@@ -474,7 +474,7 @@
         '<span class="emp-avatar">' + escapeHtml(initials(emp.EmpName)) + '</span>' +
         '<span class="emp-info">' +
           '<span class="name">' + escapeHtml(emp.EmpName) + "</span>" +
-          '<span class="sub">' + escapeHtml([emp.Position, emp.Team].filter(Boolean).join(" • ")) + "</span>" +
+          '<span class="sub">' + escapeHtml([emp.Position, emp.Team, emp.Company].filter(Boolean).join(" • ")) + "</span>" +
         "</span>" +
         (isSelected
           ? '<span class="check">&#10003;</span>'
