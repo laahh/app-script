@@ -4190,7 +4190,8 @@
     }
 
     function employeeSearchLabel(employee) {
-      return employee.EmpName + " (" + employee.EmpId + ")";
+      const detail = [employee.Position, employee.Team].filter(Boolean).join(" • ");
+      return employee.EmpName + (detail ? " — " + detail : "") + " (" + employee.EmpId + ")";
     }
 
     function fetchEmployeeSearch(query, excludeEmpId) {
@@ -4265,9 +4266,14 @@
       });
 
       return {
-        setValue: function (empId, empName) {
+        setValue: function (empId, empName, position, team) {
           if (empId && empName) {
-            const employee = { EmpId: String(empId), EmpName: empName };
+            const employee = {
+              EmpId: String(empId),
+              EmpName: empName,
+              Position: position || "",
+              Team: team || ""
+            };
             const label = employeeSearchLabel(employee);
             labelMap[label] = employee;
             searchInput.value = label;
@@ -4277,7 +4283,7 @@
             hiddenInput.value = "";
           }
           if (options.onChange) {
-            options.onChange(empId ? { EmpId: String(empId), EmpName: empName } : null);
+            options.onChange(empId ? { EmpId: String(empId), EmpName: empName, Position: position || "", Team: team || "" } : null);
           }
         },
         clear: function () {
@@ -4950,7 +4956,7 @@
       );
 
       if (data.PICEmpId && data.PICName) {
-        picPicker.setValue(data.PICEmpId, data.PICName);
+        picPicker.setValue(data.PICEmpId, data.PICName, data.PICPosition, data.PICTeam);
         updatePICInfo({
           Position: data.PICPosition,
           Team: data.PICTeam,
@@ -5134,7 +5140,12 @@
       $("trackerType").value = tracker.TrackerType || "Project";
       $("trackerName").value = tracker.ProjectIssueName || "";
       $("trackerDepartment").value = tracker.Department || "";
-      trackerLeaderPicker.setValue(tracker.ProjectLeaderEmpId, tracker.ProjectLeaderName);
+      trackerLeaderPicker.setValue(
+        tracker.ProjectLeaderEmpId,
+        tracker.ProjectLeaderName,
+        tracker.ProjectLeaderPosition,
+        tracker.ProjectLeaderTeam
+      );
       updateTrackerPeopleInfo({
         Position: tracker.ProjectLeaderPosition,
         Team: tracker.ProjectLeaderTeam,
@@ -5380,6 +5391,12 @@
       const selectedUpdaterName = task
         ? (task.PICName || tracker.ProjectLeaderName || "")
         : (tracker.ProjectLeaderName || "");
+      const selectedUpdaterPosition = task
+        ? (task.PICPosition || tracker.ProjectLeaderPosition || "")
+        : (tracker.ProjectLeaderPosition || "");
+      const selectedUpdaterTeam = task
+        ? (task.PICTeam || tracker.ProjectLeaderTeam || "")
+        : (tracker.ProjectLeaderTeam || "");
       const entityId = task ? task.SubTaskId : tracker.TrackerId;
       const buttonText = task ? "Save Sub Task Update" : "Save Overall Update";
 
@@ -5404,7 +5421,7 @@
             '<label>Updated By</label>' +
             '<input type="text" class="inline-updated-by-search" list="inline_updated_by_list_' + escapeHtml(entityId) + '" placeholder="Cari nama karyawan...">' +
             '<datalist class="inline-updated-by-datalist" id="inline_updated_by_list_' + escapeHtml(entityId) + '"></datalist>' +
-            '<input type="hidden" class="inline-updated-by" data-selected-emp-id="' + escapeHtml(selectedUpdaterId) + '" data-selected-emp-name="' + escapeHtml(selectedUpdaterName) + '">' +
+            '<input type="hidden" class="inline-updated-by" data-selected-emp-id="' + escapeHtml(selectedUpdaterId) + '" data-selected-emp-name="' + escapeHtml(selectedUpdaterName) + '" data-selected-emp-position="' + escapeHtml(selectedUpdaterPosition) + '" data-selected-emp-team="' + escapeHtml(selectedUpdaterTeam) + '">' +
           '</div>' +
           '<div class="tracker-inline-save-cell">' +
             '<button class="btn primary tracker-inline-save" type="button">' + escapeHtml(buttonText) + '</button>' +
@@ -5657,9 +5674,11 @@
         const picker = wireEmployeePicker(searchInput, hiddenInput, datalistEl);
         const presetEmpId = hiddenInput.getAttribute("data-selected-emp-id");
         const presetEmpName = hiddenInput.getAttribute("data-selected-emp-name");
+        const presetEmpPosition = hiddenInput.getAttribute("data-selected-emp-position");
+        const presetEmpTeam = hiddenInput.getAttribute("data-selected-emp-team");
 
         if (presetEmpId && presetEmpName) {
-          picker.setValue(presetEmpId, presetEmpName);
+          picker.setValue(presetEmpId, presetEmpName, presetEmpPosition, presetEmpTeam);
         }
       });
 
@@ -5997,7 +6016,9 @@
       $("trackerUpdateRemarks").value = "";
       trackerUpdatedByPicker.setValue(
         task.PICEmpId || tracker.ProjectLeaderEmpId || "",
-        task.PICName || tracker.ProjectLeaderName || ""
+        task.PICName || tracker.ProjectLeaderName || "",
+        task.PICPosition || tracker.ProjectLeaderPosition || "",
+        task.PICTeam || tracker.ProjectLeaderTeam || ""
       );
       $("trackerSubTaskDetail").innerHTML =
         '<b>' + escapeHtml(task.SubTaskName) + '</b><br>' +
@@ -6603,7 +6624,7 @@
       $("eventName").value = event.EventName || "";
       $("eventDescription").value = event.Description || "";
       $("eventWhere").value = event.Where || "";
-      eventPICPicker.setValue(event.PICEmpId, event.PICName);
+      eventPICPicker.setValue(event.PICEmpId, event.PICName, event.PICPosition, event.PICTeam);
       updateEventPICInfo({
         Position: event.PICPosition,
         Team: event.PICTeam,
