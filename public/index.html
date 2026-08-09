@@ -4221,7 +4221,7 @@
      * sesuai di markup.
      */
     function setupEmployeePicker(searchId, hiddenId, options) {
-      return wireEmployeePicker($(searchId), $(hiddenId), $(searchId + "_list"), options);
+      return wireEmployeePicker($(searchId), $(hiddenId), $(hiddenId + "_list"), options);
     }
 
     function wireEmployeePicker(searchInput, hiddenInput, datalistEl, options) {
