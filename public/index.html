@@ -4240,9 +4240,17 @@
 
       searchInput.addEventListener("input", function () {
         resolveFromLabel();
+        clearTimeout(debounceTimer);
+
+        // Teks saat ini sudah pas-persis dengan salah satu hasil (user baru
+        // memilih dari datalist) -- jangan cari ulang, itu akan memakai
+        // seluruh label (termasuk jabatan/dept) sebagai kata kunci dan tidak
+        // ketemu apa pun, sehingga pilihan yang baru dibuat malah terhapus.
+        if (labelMap[searchInput.value]) {
+          return;
+        }
 
         const text = searchInput.value.trim();
-        clearTimeout(debounceTimer);
 
         if (!text) {
           datalistEl.innerHTML = "";
