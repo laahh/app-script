@@ -63,7 +63,7 @@ npx vercel
 npx vercel --prod
 ```
 
-Cron email berjalan otomatis setiap **15 menit** (`vercel.json`).
+Cron email berjalan otomatis **sekali sehari** sekitar jam 08:00 WIB (lihat jadwal di `vercel.json`).
 
 ## API Endpoints
 

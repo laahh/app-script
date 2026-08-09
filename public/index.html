@@ -2988,10 +2988,10 @@
           </div>
 
           <div class="scheduler-install-note">
-            <b>Instalasi satu kali:</b> buka Apps Script Editor, pilih fungsi
-            <code>installPortalSchedulerTrigger</code>, lalu klik <b>Run</b> dan berikan izin.
-            Setelah itu, hari dan jam dapat diubah kapan saja dari halaman ini tanpa memanggil
-            <code>ScriptApp.getProjectTriggers</code> melalui Web App.
+            <b>Pengiriman otomatis:</b> dijalankan oleh <b>Vercel Cron</b> (lihat <code>vercel.json</code>),
+            yang saat ini terpasang untuk mengecek jadwal sekali sehari sekitar jam 08:00 WIB.
+            Tidak perlu instalasi manual — Jam Pengiriman di bawah sebaiknya diatur pada atau
+            sebelum jam cron tersebut agar email benar-benar terkirim.
           </div>
 
           <div class="admin-actions">

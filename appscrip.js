@@ -4858,8 +4858,9 @@ function getEmailSchedulerSettings() {
     RemainingDailyQuota: remainingQuota,
     TimeZone: Session.getScriptTimeZone(),
     TriggerInstallNote:
-      "Jalankan installPortalSchedulerTrigger satu kali dari Apps Script Editor. " +
-      "Halaman web tidak lagi memanggil ScriptApp.getProjectTriggers."
+      "Pengiriman email otomatis dijalankan oleh Vercel Cron (lihat vercel.json) " +
+      "sekali sehari sesuai jadwal yang di-deploy. Pastikan CRON_SECRET sudah di-set " +
+      "di environment Vercel."
   });
 }
 
@@ -6063,7 +6064,7 @@ function installPortalSchedulerTrigger() {
   return {
     installed: true,
     message:
-      "Trigger scheduler berhasil dipasang. Sistem akan memeriksa jadwal setiap 15 menit."
+      "Trigger scheduler berhasil dipasang."
   };
 }
 
@@ -6112,7 +6113,7 @@ function describePortalEmailTrigger_(settings, triggerInstalled) {
       daysLabel +
       " pukul " +
       timeLabel +
-      ", tetapi trigger belum dipasang. Jalankan installPortalSchedulerTrigger dari Apps Script Editor."
+      ", tetapi cron pengirim belum aktif. Pastikan CRON_SECRET sudah di-set di environment."
     );
   }
 
@@ -6122,7 +6123,7 @@ function describePortalEmailTrigger_(settings, triggerInstalled) {
     timeLabel +
     " (" +
     Session.getScriptTimeZone() +
-    "). Trigger memeriksa jadwal setiap 15 menit."
+    "). Dikirim oleh Vercel Cron sekali sehari sesuai jadwal di vercel.json."
   );
 }
 

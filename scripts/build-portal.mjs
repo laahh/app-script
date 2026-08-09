@@ -316,20 +316,6 @@ code = code.replace(/await await /g, "await ");
 // await fn().method → (await fn()).method
 code = fixAwaitChaining(code);
 
-// Fix TriggerInstallNote for Vercel
-code = code.replace(
-  /"Jalankan installPortalSchedulerTrigger satu kali dari Apps Script Editor\.[\s\S]*?ScriptApp\.getProjectTriggers\."/,
-  '"Cron Vercel aktif via vercel.json (setiap 15 menit). Set CRON_SECRET di environment."'
-);
-code = code.replace(
-  "tetapi trigger belum dipasang. Jalankan installPortalSchedulerTrigger dari Apps Script Editor.",
-  "tetapi cron belum aktif. Set CRON_SECRET dan deploy ke Vercel."
-);
-code = code.replace(
-  "). Trigger memeriksa jadwal setiap 15 menit.",
-  "). Vercel Cron memeriksa jadwal setiap 15 menit."
-);
-
 const header = `/** @generated from appscrip.js — do not edit manually; run npm run build:portal */
 import {
   SPREADSHEET_ID,
