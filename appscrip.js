@@ -5941,7 +5941,7 @@ function readEmailSchedulerSettings_() {
       return String(value || "").trim();
     });
 
-  const row = sheet.getRange(2, 1, 2, sheet.getLastColumn()).getValues()[0] || [];
+  const row = sheet.getRange(2, 1, 1, sheet.getLastColumn()).getValues()[0] || [];
   const result = Object.assign({}, defaults);
 
   headers.forEach(function (header, index) {
