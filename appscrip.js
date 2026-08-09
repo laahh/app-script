@@ -212,6 +212,10 @@ const HSE_SYNC_MINUTE = 0;
 const HSE_API_DEFAULT_BASE = "https://hseautomation.beraucoal.co.id";
 const HSE_API_DEFAULT_COMPANY_ID = "5194";
 
+// Sheet Employees sekarang puluhan ribu baris -- batasi ukuran leaderboard
+// yang dikirim ke dashboard supaya payload tidak ikut membengkak.
+const DASHBOARD_LEADERBOARD_LIMIT = 200;
+
 const EMPLOYEE_SYNC_HEADERS = [
   "EmpId",
   "SID",
@@ -275,7 +279,7 @@ function getInit() {
   const currentYear = new Date().getFullYear();
 
   return {
-    employees: employees,
+    employeeCount: employees.length,
     leaveTypes: leaveTypes,
     teams: uniqueSorted_(employees.map(function (employee) {
       return employee.Team;
@@ -576,6 +580,12 @@ function getDashboardOverview(request) {
     ? Math.round((totalEffectivePersonDays / totalPersonWorkingDays) * 1000) / 10
     : 0;
 
+  // Sheet Employees sekarang puluhan ribu baris -- jangan kirim seluruh
+  // leaderboard ke client, cukup yang paling relevan (leave terbanyak).
+  // Agregat di atas (workforceEffectiveness) tetap dihitung dari SEMUA
+  // employee sebelum di-potong di sini.
+  const leaderboardForResponse = leaderboard.slice(0, DASHBOARD_LEADERBOARD_LIMIT);
+
   return {
     todayISO: todayISO,
     referenceDateISO: formatISO_(referenceDate),
@@ -601,7 +611,8 @@ function getDashboardOverview(request) {
     moreThanTwoWeeksEvents: moreThanTwoWeeksEvents,
     leaveThisWeek: leaveThisWeek,
     upcomingLeave: upcomingLeave.slice(0, 30),
-    leaderboard: leaderboard,
+    leaderboard: leaderboardForResponse,
+    leaderboardTotalCount: leaderboard.length,
     workforceEffectiveness: {
       employeeCount: employees.length,
       totalWorkingDaysPerEmployee: totalWorkingDaysYTD,
@@ -1959,16 +1970,15 @@ function getCalendarRange(request) {
     cutoff = addDays_(yearStart, -1);
   }
 
+  // Sheet Employees sekarang puluhan ribu baris -- JANGAN pre-inisialisasi
+  // container untuk semua employee di sini. yearlyDaysByEmployee /
+  // yearlyBreakdownByEmployee / personItems dibuat on-demand (lihat fallback
+  // di bawah dan addPersonCalendarItem_) hanya untuk employee yang memang
+  // punya leave/assignment, supaya tidak membengkakkan payload dengan
+  // puluhan ribu entri kosong.
   const yearlyDaysByEmployee = {};
   const yearlyBreakdownByEmployee = {};
   const personItems = {};
-
-  allEmployees.forEach(function (employee) {
-    const employeeId = String(employee.EmpId);
-    yearlyDaysByEmployee[employeeId] = 0;
-    yearlyBreakdownByEmployee[employeeId] = {};
-    personItems[employeeId] = [];
-  });
 
   allLeaves.forEach(function (leave) {
     const employeeId = String(leave.EmpId || "");
@@ -2272,6 +2282,17 @@ function getCalendarRange(request) {
       });
 
       return employeeMatch || itemMatch;
+    });
+  }
+
+  // Tampilan default (tanpa filter team/site/search) tidak perlu menampilkan
+  // puluhan ribu baris employee yang kosong -- cukup yang punya leave,
+  // event, atau project/issue pada tahun ini. Kalau user memang memfilter
+  // team/site tertentu atau mencari sesuatu, roster lengkap tetap
+  // ditampilkan (termasuk yang kosong) supaya tetap terlihat siapa yang free.
+  if (team === "All Teams" && site === "All Sites" && !search) {
+    employees = employees.filter(function (employee) {
+      return (personItems[String(employee.EmpId)] || []).length > 0;
     });
   }
 
@@ -3023,6 +3044,32 @@ function getEmployees_() {
     });
 }
 
+/**
+ * Pencarian karyawan server-side (dipakai oleh kotak cari PIC di seluruh
+ * halaman & halaman absensi publik) -- sheet Employees sekarang puluhan
+ * ribu baris, jadi TIDAK boleh lagi dikirim penuh ke client. Hanya
+ * mengembalikan sejumlah kecil hasil yang cocok.
+ */
+function getEmployeeSearchResults(request) {
+  request = request || {};
+
+  const text = String(request.query || "").trim().toLowerCase();
+  const limit = clampInteger_(request.limit, 1, 50, 20);
+
+  if (!text) {
+    return [];
+  }
+
+  const matches = getEmployees_().filter(function (employee) {
+    return (
+      (employee.EmpName || "").toLowerCase().indexOf(text) >= 0 ||
+      (employee.EmpId || "").toLowerCase().indexOf(text) >= 0
+    );
+  });
+
+  return matches.slice(0, limit);
+}
+
 function getLeaveTypes_() {
   const table = readTable_(getSheet_(SHEET_LEAVE_TYPES));
   const head = table.head;
@@ -3670,12 +3717,6 @@ function getEventCheckinInfo(eventId) {
     throw new Error("Event tidak ditemukan atau QR sudah tidak berlaku.");
   }
 
-  const employees = getEmployees_()
-    .slice()
-    .sort(function (a, b) {
-      return String(a.EmpName || "").localeCompare(String(b.EmpName || ""));
-    });
-
   const attendance = getEventAttendanceRows_(event.EventId);
 
   return {
@@ -3686,15 +3727,6 @@ function getEventCheckinInfo(eventId) {
       Where: event.Where,
       EventDate: event.EventDate
     },
-    employees: employees.map(function (employee) {
-      return {
-        EmpId: employee.EmpId,
-        EmpName: employee.EmpName,
-        Team: employee.Team,
-        Position: employee.Position,
-        SiteDedicated: employee.SiteDedicated
-      };
-    }),
     checkedInEmpIds: attendance.map(function (row) {
       return row.EmpId;
     }),

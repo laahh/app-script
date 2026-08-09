@@ -3054,8 +3054,10 @@
       <div class="modal-body">
         <div class="form-grid">
           <div class="field span-12">
-            <label for="leaveEmployee">Employee</label>
-            <select id="leaveEmployee"></select>
+            <label for="leaveEmployee_search">Employee</label>
+            <input type="text" id="leaveEmployee_search" list="leaveEmployee_list" placeholder="Cari nama karyawan..." autocomplete="off">
+            <datalist id="leaveEmployee_list"></datalist>
+            <input type="hidden" id="leaveEmployee">
           </div>
 
           <div class="field span-12">
@@ -3065,8 +3067,10 @@
           </div>
 
           <div class="field span-12">
-            <label for="leaveBackup">Backup / Acting PIC</label>
-            <select id="leaveBackup"></select>
+            <label for="leaveBackup_search">Backup / Acting PIC</label>
+            <input type="text" id="leaveBackup_search" list="leaveBackup_list" placeholder="Cari nama karyawan..." autocomplete="off">
+            <datalist id="leaveBackup_list"></datalist>
+            <input type="hidden" id="leaveBackup">
             <div id="leaveBackupInfo" class="hint"></div>
           </div>
 
@@ -3135,8 +3139,10 @@
           </div>
 
           <div class="field span-12">
-            <label for="eventPIC">PIC</label>
-            <select id="eventPIC"></select>
+            <label for="eventPIC_search">PIC</label>
+            <input type="text" id="eventPIC_search" list="eventPIC_list" placeholder="Cari nama karyawan..." autocomplete="off">
+            <datalist id="eventPIC_list"></datalist>
+            <input type="hidden" id="eventPIC">
             <div id="eventPICInfo" class="hint"></div>
           </div>
 
@@ -3245,8 +3251,10 @@
         </div>
 
         <div class="field" style="margin-top:10px;">
-          <label for="eventMinutesUpdatedBy">Diperbarui Oleh</label>
-          <select id="eventMinutesUpdatedBy"></select>
+          <label for="eventMinutesUpdatedBy_search">Diperbarui Oleh</label>
+          <input type="text" id="eventMinutesUpdatedBy_search" list="eventMinutesUpdatedBy_list" placeholder="Cari nama karyawan..." autocomplete="off">
+          <datalist id="eventMinutesUpdatedBy_list"></datalist>
+          <input type="hidden" id="eventMinutesUpdatedBy">
         </div>
 
         <div class="actions">
@@ -3264,7 +3272,9 @@
           <label for="newActionItemTask">Tambah Action Item</label>
           <input id="newActionItemTask" type="text" placeholder="Deskripsi tugas...">
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <select id="newActionItemPIC" style="flex:1;"></select>
+            <input type="text" id="newActionItemPIC_search" list="newActionItemPIC_list" placeholder="Cari PIC (opsional)..." autocomplete="off" style="flex:1;">
+            <datalist id="newActionItemPIC_list"></datalist>
+            <input type="hidden" id="newActionItemPIC">
             <input id="newActionItemDueDate" type="date" style="width:150px;">
           </div>
           <button id="btnAddActionItem" class="btn" type="button" style="margin-top:8px;">+ Tambah Action Item</button>
@@ -3314,8 +3324,10 @@
             </div>
 
             <div class="field span-4">
-              <label for="trackerLeader">Project Leader</label>
-              <select id="trackerLeader"></select>
+              <label for="trackerLeader_search">Project Leader</label>
+              <input type="text" id="trackerLeader_search" list="trackerLeader_list" placeholder="Cari nama karyawan..." autocomplete="off">
+              <datalist id="trackerLeader_list"></datalist>
+              <input type="hidden" id="trackerLeader">
               <div id="trackerLeaderInfo" class="hint"></div>
             </div>
 
@@ -3535,8 +3547,10 @@
           </div>
 
           <div class="field span-8">
-            <label for="trackerUpdatedBy">Updated By</label>
-            <select id="trackerUpdatedBy"></select>
+            <label for="trackerUpdatedBy_search">Updated By</label>
+            <input type="text" id="trackerUpdatedBy_search" list="trackerUpdatedBy_list" placeholder="Cari nama karyawan..." autocomplete="off">
+            <datalist id="trackerUpdatedBy_list"></datalist>
+            <input type="hidden" id="trackerUpdatedBy">
           </div>
 
           <div class="field span-12">
@@ -3621,6 +3635,10 @@
       inlineTrackerToReopen: "",
       inlineSubTaskToReopen: ""
     };
+
+    let leaveEmployeePicker, leaveBackupPicker, eventPICPicker,
+      trackerLeaderPicker, trackerUpdatedByPicker,
+      eventMinutesUpdatedByPicker, newActionItemPICPicker;
 
     const TRACKER_CACHE = {};
     const EVENT_CACHE = {};
@@ -4171,21 +4189,104 @@
       return (first + second).toUpperCase();
     }
 
-    function employeeOption(employee) {
-      const detail = [
-        employee.Position,
-        employee.Team,
-        employee.SiteDedicated
-      ].filter(Boolean).join(" • ");
+    function employeeSearchLabel(employee) {
+      return employee.EmpName + " (" + employee.EmpId + ")";
+    }
 
-      return (
-        '<option value="' + escapeHtml(employee.EmpId) + '">' +
-        escapeHtml(employee.EmpId) +
-        " - " +
-        escapeHtml(employee.EmpName) +
-        (detail ? " • " + escapeHtml(detail) : "") +
-        "</option>"
-      );
+    function fetchEmployeeSearch(query, excludeEmpId) {
+      const text = String(query || "").trim();
+
+      if (!text) {
+        return Promise.resolve([]);
+      }
+
+      return OhsPortalApi.invoke("getEmployeeSearchResults", [{ query: text, limit: 20 }])
+        .then(function (results) {
+          if (!excludeEmpId) return results;
+          return (results || []).filter(function (employee) {
+            return String(employee.EmpId) !== String(excludeEmpId);
+          });
+        })
+        .catch(function () {
+          return [];
+        });
+    }
+
+    /**
+     * Kotak cari-&-pilih nama karyawan, pengganti <select> raksasa --
+     * sheet Employees sekarang puluhan ribu baris jadi tidak lagi dikirim
+     * penuh ke browser. hiddenInput menyimpan EmpId terpilih dan tetap bisa
+     * dibaca lewat $(id).value seperti sebelumnya (kode lain tidak perlu
+     * berubah). searchInput.id + "_list" harus mengarah ke <datalist> yang
+     * sesuai di markup.
+     */
+    function setupEmployeePicker(searchId, hiddenId, options) {
+      return wireEmployeePicker($(searchId), $(hiddenId), $(searchId + "_list"), options);
+    }
+
+    function wireEmployeePicker(searchInput, hiddenInput, datalistEl, options) {
+      options = options || {};
+      const labelMap = {};
+      let debounceTimer = null;
+
+      function resolveFromLabel() {
+        const employee = labelMap[searchInput.value] || null;
+        hiddenInput.value = employee ? employee.EmpId : "";
+        if (options.onChange) {
+          options.onChange(employee);
+        }
+      }
+
+      searchInput.addEventListener("input", function () {
+        resolveFromLabel();
+
+        const text = searchInput.value.trim();
+        clearTimeout(debounceTimer);
+
+        if (!text) {
+          datalistEl.innerHTML = "";
+          return;
+        }
+
+        debounceTimer = setTimeout(function () {
+          const excludeEmpId = options.excludeEmpId ? options.excludeEmpId() : "";
+          fetchEmployeeSearch(text, excludeEmpId).then(function (results) {
+            Object.keys(labelMap).forEach(function (key) {
+              delete labelMap[key];
+            });
+            datalistEl.innerHTML = (results || []).map(function (employee) {
+              const label = employeeSearchLabel(employee);
+              labelMap[label] = employee;
+              return '<option value="' + escapeHtml(label) + '"></option>';
+            }).join("");
+            resolveFromLabel();
+          });
+        }, 220);
+      });
+
+      return {
+        setValue: function (empId, empName) {
+          if (empId && empName) {
+            const employee = { EmpId: String(empId), EmpName: empName };
+            const label = employeeSearchLabel(employee);
+            labelMap[label] = employee;
+            searchInput.value = label;
+            hiddenInput.value = employee.EmpId;
+          } else {
+            searchInput.value = "";
+            hiddenInput.value = "";
+          }
+          if (options.onChange) {
+            options.onChange(empId ? { EmpId: String(empId), EmpName: empName } : null);
+          }
+        },
+        clear: function () {
+          searchInput.value = "";
+          hiddenInput.value = "";
+          datalistEl.innerHTML = "";
+          if (options.onChange) options.onChange(null);
+        }
+      };
     }
 
     function fillFilter(id, firstLabel, values) {
@@ -4772,16 +4873,6 @@
 
     let SUBTASK_SEQUENCE = 0;
 
-    function subTaskEmployeeOptions(selectedId) {
-      return '<option value="">-- choose PIC --</option>' +
-        (INIT.employees || []).map(function (employee) {
-          const selected = String(employee.EmpId) === String(selectedId || "")
-            ? ' selected'
-            : '';
-          return employeeOption(employee).replace('<option', '<option' + selected);
-        }).join('');
-    }
-
     function subTaskSiteOptions(selectedSite) {
       return '<option value="">-- choose site --</option>' +
         (INIT.sites || []).map(function (site) {
@@ -4814,7 +4905,9 @@
       row.innerHTML =
         '<td class="subtask-row-no">' + SUBTASK_SEQUENCE + '</td>' +
         '<td><input class="subtask-name" value="' + escapeHtml(data.SubTaskName || '') + '" placeholder="Nama deliverable / action"></td>' +
-        '<td><select class="subtask-pic">' + subTaskEmployeeOptions(data.PICEmpId) + '</select>' +
+        '<td><input type="text" class="subtask-pic-search" list="subtask_pic_list_' + SUBTASK_SEQUENCE + '" placeholder="Cari PIC...">' +
+          '<datalist class="subtask-pic-datalist" id="subtask_pic_list_' + SUBTASK_SEQUENCE + '"></datalist>' +
+          '<input type="hidden" class="subtask-pic">' +
           '<div class="hint subtask-pic-info"></div></td>' +
         '<td><div class="subtask-department-cell">-</div></td>' +
         '<td><select class="subtask-site">' + subTaskSiteOptions(data.Site) + '</select></td>' +
@@ -4834,16 +4927,11 @@
       $('subTaskBuilder').appendChild(row);
       updateSubTaskEmptyState();
 
-      const picSelect = row.querySelector('.subtask-pic');
       const siteSelect = row.querySelector('.subtask-site');
       const info = row.querySelector('.subtask-pic-info');
       const departmentCell = row.querySelector('.subtask-department-cell');
 
-      function updatePICInfo() {
-        const employee = (INIT.employees || []).find(function (item) {
-          return String(item.EmpId) === String(picSelect.value);
-        });
-
+      function updatePICInfo(employee) {
         departmentCell.textContent = employee ? (employee.Team || '-') : '-';
         info.textContent = employee
           ? [employee.Position, employee.SiteDedicated].filter(Boolean).join(' • ')
@@ -4854,7 +4942,21 @@
         }
       }
 
-      picSelect.addEventListener('change', updatePICInfo);
+      const picPicker = wireEmployeePicker(
+        row.querySelector('.subtask-pic-search'),
+        row.querySelector('.subtask-pic'),
+        row.querySelector('.subtask-pic-datalist'),
+        { onChange: updatePICInfo }
+      );
+
+      if (data.PICEmpId && data.PICName) {
+        picPicker.setValue(data.PICEmpId, data.PICName);
+        updatePICInfo({
+          Position: data.PICPosition,
+          Team: data.PICTeam,
+          SiteDedicated: data.PICSiteDedicated
+        });
+      }
 
       const removeButton = row.querySelector('.subtask-remove');
       if (removeButton) {
@@ -4951,11 +5053,7 @@
     }
 
 
-    function updateTrackerPeopleInfo() {
-      const leader = (INIT.employees || []).find(function (item) {
-        return String(item.EmpId) === String($("trackerLeader").value);
-      });
-
+    function updateTrackerPeopleInfo(leader) {
       $("trackerLeaderInfo").textContent = leader
         ? [leader.Position, leader.Team, leader.SiteDedicated].filter(Boolean).join(" • ")
         : "";
@@ -4990,7 +5088,7 @@
       $("trackerType").value = "Project";
       $("trackerName").value = "";
       $("trackerDepartment").value = "";
-      $("trackerLeader").value = "";
+      trackerLeaderPicker.clear();
       $("trackerSite").value = "";
       $("trackerStartDate").value = INIT.todayISO;
       $("trackerDueDate").value = addClientDays(INIT.todayISO, 7);
@@ -5003,7 +5101,6 @@
       $("trackerParentRemarks").value = "";
       $("subTaskBuilder").innerHTML = "";
       SUBTASK_SEQUENCE = 0;
-      updateTrackerPeopleInfo();
       updateSubTaskEmptyState();
       updateTrackerDurationPreview();
 
@@ -5037,7 +5134,12 @@
       $("trackerType").value = tracker.TrackerType || "Project";
       $("trackerName").value = tracker.ProjectIssueName || "";
       $("trackerDepartment").value = tracker.Department || "";
-      $("trackerLeader").value = tracker.ProjectLeaderEmpId || "";
+      trackerLeaderPicker.setValue(tracker.ProjectLeaderEmpId, tracker.ProjectLeaderName);
+      updateTrackerPeopleInfo({
+        Position: tracker.ProjectLeaderPosition,
+        Team: tracker.ProjectLeaderTeam,
+        SiteDedicated: tracker.ProjectLeaderSiteDedicated
+      });
       $("trackerSite").value = tracker.Site || "";
       $("trackerStartDate").value = tracker.StartDate || INIT.todayISO;
       $("trackerDueDate").value = tracker.DueDate || addClientDays(INIT.todayISO, 7);
@@ -5054,6 +5156,10 @@
           SubTaskId: task.SubTaskId,
           SubTaskName: task.SubTaskName,
           PICEmpId: task.PICEmpId,
+          PICName: task.PICName,
+          PICPosition: task.PICPosition,
+          PICTeam: task.PICTeam,
+          PICSiteDedicated: task.PICSiteDedicated,
           Site: task.Site,
           DescriptionSubTask: task.DescriptionSubTask,
           StartDate: task.StartDate,
@@ -5065,7 +5171,6 @@
         });
       });
 
-      updateTrackerPeopleInfo();
       updateTrackerDurationPreview();
       updateSubTaskEmptyState();
       setMessage(
@@ -5269,9 +5374,12 @@
 
     function buildInlineUpdateForm(kind, tracker, task) {
       const source = task || tracker;
-      const selectedUpdater = task
+      const selectedUpdaterId = task
         ? (task.PICEmpId || tracker.ProjectLeaderEmpId || "")
         : (tracker.ProjectLeaderEmpId || "");
+      const selectedUpdaterName = task
+        ? (task.PICName || tracker.ProjectLeaderName || "")
+        : (tracker.ProjectLeaderName || "");
       const entityId = task ? task.SubTaskId : tracker.TrackerId;
       const buttonText = task ? "Save Sub Task Update" : "Save Overall Update";
 
@@ -5294,7 +5402,9 @@
           '</div>' +
           '<div class="field">' +
             '<label>Updated By</label>' +
-            '<select class="inline-updated-by">' + subTaskEmployeeOptions(selectedUpdater) + '</select>' +
+            '<input type="text" class="inline-updated-by-search" list="inline_updated_by_list_' + escapeHtml(entityId) + '" placeholder="Cari nama karyawan...">' +
+            '<datalist class="inline-updated-by-datalist" id="inline_updated_by_list_' + escapeHtml(entityId) + '"></datalist>' +
+            '<input type="hidden" class="inline-updated-by" data-selected-emp-id="' + escapeHtml(selectedUpdaterId) + '" data-selected-emp-name="' + escapeHtml(selectedUpdaterName) + '">' +
           '</div>' +
           '<div class="tracker-inline-save-cell">' +
             '<button class="btn primary tracker-inline-save" type="button">' + escapeHtml(buttonText) + '</button>' +
@@ -5540,6 +5650,19 @@
     }
 
     function bindInlineTrackerDetail(detailRow, tracker) {
+      detailRow.querySelectorAll(".inline-updated-by").forEach(function (hiddenInput) {
+        const field = hiddenInput.closest(".field");
+        const searchInput = field.querySelector(".inline-updated-by-search");
+        const datalistEl = field.querySelector(".inline-updated-by-datalist");
+        const picker = wireEmployeePicker(searchInput, hiddenInput, datalistEl);
+        const presetEmpId = hiddenInput.getAttribute("data-selected-emp-id");
+        const presetEmpName = hiddenInput.getAttribute("data-selected-emp-name");
+
+        if (presetEmpId && presetEmpName) {
+          picker.setValue(presetEmpId, presetEmpName);
+        }
+      });
+
       detailRow.querySelectorAll(".tracker-inline-task-toggle").forEach(function (button) {
         button.addEventListener("click", function () {
           openInlineSubTask(button, false);
@@ -5872,7 +5995,10 @@
       $("trackerUpdatePercent").value = Number(task.CurrentPercentComplete || 0);
       $("trackerUpdateProgress").value = "";
       $("trackerUpdateRemarks").value = "";
-      $("trackerUpdatedBy").value = task.PICEmpId || tracker.ProjectLeaderEmpId || "";
+      trackerUpdatedByPicker.setValue(
+        task.PICEmpId || tracker.ProjectLeaderEmpId || "",
+        task.PICName || tracker.ProjectLeaderName || ""
+      );
       $("trackerSubTaskDetail").innerHTML =
         '<b>' + escapeHtml(task.SubTaskName) + '</b><br>' +
         '<b>PIC:</b> ' + escapeHtml(task.PICName || task.PICEmpId || '-') +
@@ -6016,32 +6142,7 @@
         .updateTrackerSubTask(payload);
     }
 
-    function refreshBackupOptions() {
-      const selectedEmployeeId = $("leaveEmployee").value;
-      const currentBackupId = $("leaveBackup").value;
-
-      const candidates = (INIT.employees || []).filter(function (employee) {
-        return String(employee.EmpId) !== String(selectedEmployeeId);
-      });
-
-      $("leaveBackup").innerHTML =
-        '<option value="">-- choose backup / acting PIC --</option>' +
-        candidates.map(employeeOption).join("");
-
-      if (candidates.some(function (employee) {
-        return String(employee.EmpId) === String(currentBackupId);
-      })) {
-        $("leaveBackup").value = currentBackupId;
-      }
-
-      updateBackupInfo();
-    }
-
-    function updateBackupInfo() {
-      const employee = (INIT.employees || []).find(function (item) {
-        return String(item.EmpId) === String($("leaveBackup").value);
-      });
-
+    function updateBackupInfo(employee) {
       $("leaveBackupInfo").textContent = employee
         ? [employee.Position, employee.Team, employee.SiteDedicated]
             .filter(Boolean)
@@ -6050,16 +6151,15 @@
     }
 
     function clearLeaveForm(keepMessage) {
-      $("leaveEmployee").value = "";
+      leaveEmployeePicker.clear();
       $("leaveType").value = "";
-      $("leaveBackup").value = "";
+      leaveBackupPicker.clear();
       $("leaveStart").value = INIT.todayISO;
       $("leaveEnd").value = INIT.todayISO;
       $("leaveTimeFrom").value = "";
       $("leaveTimeTo").value = "";
       $("leaveNote").value = "";
       $("leaveAvailableInfo").textContent = "";
-      refreshBackupOptions();
 
       if (!keepMessage) {
         hideMessage("leaveMessage");
@@ -6070,7 +6170,7 @@
       clearLeaveForm(false);
       $("leaveCreateModal").classList.remove("hide");
       setTimeout(function () {
-        $("leaveEmployee").focus();
+        $("leaveEmployee_search").focus();
       }, 0);
     }
 
@@ -6454,11 +6554,7 @@
       loadCalendar();
     }
 
-    function updateEventPICInfo() {
-      const employee = (INIT.employees || []).find(function (item) {
-        return String(item.EmpId) === String($("eventPIC").value);
-      });
-
+    function updateEventPICInfo(employee) {
       $("eventPICInfo").textContent = employee
         ? [employee.Position, employee.Team, employee.SiteDedicated]
             .filter(Boolean)
@@ -6471,13 +6567,12 @@
       $("eventName").value = "";
       $("eventDescription").value = "";
       $("eventWhere").value = "";
-      $("eventPIC").value = "";
+      eventPICPicker.clear();
       $("eventDate").value = INIT.todayISO;
       $("eventFormTitle").textContent = "Create Event";
       $("eventFormHint").textContent =
         "Update Kesiapan diisi setelah event tersimpan melalui tombol pada daftar event.";
       $("btnSaveEvent").textContent = "Save Event";
-      updateEventPICInfo();
 
       if (!keepMessage) {
         hideMessage("eventMessage");
@@ -6508,9 +6603,13 @@
       $("eventName").value = event.EventName || "";
       $("eventDescription").value = event.Description || "";
       $("eventWhere").value = event.Where || "";
-      $("eventPIC").value = event.PICEmpId || "";
+      eventPICPicker.setValue(event.PICEmpId, event.PICName);
+      updateEventPICInfo({
+        Position: event.PICPosition,
+        Team: event.PICTeam,
+        SiteDedicated: event.PICSiteDedicated
+      });
       $("eventDate").value = event.EventDate || INIT.todayISO;
-      updateEventPICInfo();
       hideMessage("eventMessage");
       $("eventCreateModal").classList.remove("hide");
 
@@ -6808,10 +6907,8 @@
       $("newActionItemTask").value = "";
       $("newActionItemDueDate").value = "";
 
-      const employees = (INIT && INIT.employees) || [];
-      const empOptions = '<option value="">-- pilih --</option>' + employees.map(employeeOption).join("");
-      $("eventMinutesUpdatedBy").innerHTML = empOptions;
-      $("newActionItemPIC").innerHTML = '<option value="">-- PIC (opsional) --</option>' + employees.map(employeeOption).join("");
+      eventMinutesUpdatedByPicker.clear();
+      newActionItemPICPicker.clear();
 
       $("eventActionItemsList").innerHTML = '<div class="empty-hint-row">Memuat...</div>';
       $("eventMinutesModal").classList.remove("hide");
@@ -6890,7 +6987,7 @@
           $("btnAddActionItem").disabled = false;
           hideMessage("eventActionItemMessage");
           $("newActionItemTask").value = "";
-          $("newActionItemPIC").value = "";
+          newActionItemPICPicker.clear();
           $("newActionItemDueDate").value = "";
           renderActionItemsList(result.actionItems);
         })
@@ -7141,10 +7238,6 @@
           fillFilter("schedulerOverviewTeam", "All Teams", result.teams);
           fillFilter("schedulerOverviewSite", "All Sites", result.sites);
 
-          $("leaveEmployee").innerHTML =
-            '<option value="">-- choose employee --</option>' +
-            result.employees.map(employeeOption).join("");
-
           $("leaveType").innerHTML =
             '<option value="">-- choose leave type --</option>' +
             result.leaveTypes.map(function (item) {
@@ -7154,18 +7247,6 @@
                 "</option>"
               );
             }).join("");
-
-          $("eventPIC").innerHTML =
-            '<option value="">-- choose PIC --</option>' +
-            result.employees.map(employeeOption).join("");
-
-          $("trackerLeader").innerHTML =
-            '<option value="">-- choose project leader --</option>' +
-            result.employees.map(employeeOption).join("");
-
-          $("trackerUpdatedBy").innerHTML =
-            '<option value="">-- choose updater --</option>' +
-            result.employees.map(employeeOption).join("");
 
           $("trackerDepartment").innerHTML =
             '<option value="">-- choose department --</option>' +
@@ -7188,7 +7269,7 @@
           $("trackerStartDate").value = result.todayISO;
           $("trackerDueDate").value = addClientDays(result.todayISO, 7);
 
-          refreshBackupOptions();
+          updateBackupInfo(null);
           clearTrackerForm(false);
           showView("dashboard");
         })
@@ -7256,8 +7337,17 @@
     $("btnCloseLeaveCreate").onclick = closeLeaveCreate;
     $("btnCancelLeaveCreate").onclick = closeLeaveCreate;
 
-    $("leaveEmployee").onchange = refreshBackupOptions;
-    $("leaveBackup").onchange = updateBackupInfo;
+    leaveEmployeePicker = setupEmployeePicker("leaveEmployee_search", "leaveEmployee", {
+      onChange: function (employee) {
+        if (employee && String($("leaveBackup").value) === String(employee.EmpId)) {
+          leaveBackupPicker.clear();
+        }
+      }
+    });
+    leaveBackupPicker = setupEmployeePicker("leaveBackup_search", "leaveBackup", {
+      excludeEmpId: function () { return $("leaveEmployee").value; },
+      onChange: updateBackupInfo
+    });
 
     $("leaveType").onchange = function () {
       const selected = (INIT.leaveTypes || []).find(function (item) {
@@ -7335,7 +7425,11 @@
       loadCalendar();
     };
 
-    $("eventPIC").onchange = updateEventPICInfo;
+    eventPICPicker = setupEmployeePicker("eventPIC_search", "eventPIC", {
+      onChange: updateEventPICInfo
+    });
+    eventMinutesUpdatedByPicker = setupEmployeePicker("eventMinutesUpdatedBy_search", "eventMinutesUpdatedBy");
+    newActionItemPICPicker = setupEmployeePicker("newActionItemPIC_search", "newActionItemPIC");
 
     $("btnOpenEventCreate").onclick = openEventCreate;
     $("btnCloseEventCreate").onclick = closeEventCreate;
@@ -7379,7 +7473,10 @@
       }
     });
 
-    $("trackerLeader").onchange = updateTrackerPeopleInfo;
+    trackerLeaderPicker = setupEmployeePicker("trackerLeader_search", "trackerLeader", {
+      onChange: updateTrackerPeopleInfo
+    });
+    trackerUpdatedByPicker = setupEmployeePicker("trackerUpdatedBy_search", "trackerUpdatedBy");
     $("trackerStartDate").onchange = updateTrackerDurationPreview;
     $("trackerDueDate").onchange = updateTrackerDurationPreview;
 

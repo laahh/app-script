@@ -403,10 +403,10 @@
     return;
   }
 
-  var employees = [];
   var checkedInIds = [];
   var selectedEmpId = "";
   var submitting = false;
+  var searchDebounce = null;
 
   var searchInput = document.getElementById("search");
   var empListEl = document.getElementById("empList");
@@ -425,19 +425,39 @@
   }
 
   function renderList(filterText) {
-    var text = (filterText || "").trim().toLowerCase();
-    var matches = !text
-      ? []
-      : employees.filter(function (emp) {
-          return (emp.EmpName || "").toLowerCase().indexOf(text) >= 0;
-        }).slice(0, 30);
+    var text = (filterText || "").trim();
 
-    empListEl.innerHTML = "";
+    clearTimeout(searchDebounce);
 
     if (!text) {
       empListEl.innerHTML = '<div class="empty-hint">Ketik minimal 1 huruf untuk mencari nama.</div>';
       return;
     }
+
+    empListEl.innerHTML = '<div class="empty-hint">Mencari...</div>';
+
+    searchDebounce = setTimeout(function () {
+      fetch(API_BASE + "/employees/search?q=" + encodeURIComponent(text) + "&limit=30")
+        .then(function (res) {
+          return res.json().then(function (data) {
+            if (!res.ok) throw new Error(data.error || "Gagal mencari nama.");
+            return data;
+          });
+        })
+        .then(function (matches) {
+          renderMatches(matches || []);
+        })
+        .catch(function () {
+          empListEl.innerHTML = '<div class="empty-hint">Gagal mencari nama. Coba lagi.</div>';
+        });
+    }, 250);
+  }
+
+  var lastMatches = [];
+
+  function renderMatches(matches) {
+    lastMatches = matches;
+    empListEl.innerHTML = "";
 
     if (!matches.length) {
       empListEl.innerHTML = '<div class="empty-hint">Nama tidak ditemukan.<br>Coba kata kunci lain.</div>';
@@ -472,7 +492,7 @@
     selectedNameEl.textContent = emp.EmpName;
     selectedBox.classList.add("show");
     submitBtn.disabled = false;
-    renderList(searchInput.value);
+    renderMatches(lastMatches);
   }
 
   function escapeHtml(value) {
@@ -549,7 +569,6 @@
       });
     })
     .then(function (data) {
-      employees = data.employees || [];
       checkedInIds = data.checkedInEmpIds || [];
 
       document.getElementById("eventName").textContent = data.event.EventName;

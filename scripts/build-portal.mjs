@@ -14,6 +14,7 @@ const outPath = path.join(root, "lib", "portal", "index.js");
 
 const PUBLIC_EXPORTS = [
   "getInit",
+  "getEmployeeSearchResults",
   "getDashboardOverview",
   "getEmployeeLeaveHistory",
   "createTracker",

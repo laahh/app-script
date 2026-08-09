@@ -31,6 +31,7 @@
 
   const ROUTE_MAP = {
     getInit: { method: "GET", path: "init" },
+    getEmployeeSearchResults: { method: "GET", path: "employees/search" },
     getDashboardOverview: { method: "POST", path: "dashboard/overview" },
     getEmployeeLeaveHistory: { method: "GET", path: "leave/history" },
     checkLeaveOverlap: { method: "POST", path: "leave/check-overlap" },
@@ -74,6 +75,13 @@
         url.searchParams.set("trackerId", typeof first === "object" ? first.trackerId || first : first);
       } else if (route.path === "events/attendance" || route.path === "events/minutes") {
         url.searchParams.set("eventId", typeof first === "object" ? first.eventId || first : first);
+      } else if (route.path === "employees/search") {
+        if (typeof first === "object" && first) {
+          if (first.query !== undefined) url.searchParams.set("q", first.query);
+          if (first.limit !== undefined) url.searchParams.set("limit", first.limit);
+        } else {
+          url.searchParams.set("q", first);
+        }
       }
     }
 
