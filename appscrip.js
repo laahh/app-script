@@ -297,7 +297,7 @@ function getInit() {
 
 /**
  * Dashboard overview.
- * Definisi minggu: Senin sampai Minggu.
+ * Definisi minggu: Minggu sampai Sabtu.
  */
 function getDashboardOverview(request) {
   request = request || {};
@@ -315,7 +315,7 @@ function getDashboardOverview(request) {
   const referenceDate = buildReferenceDateForYear_(actualToday, year);
   const todayISO = formatISO_(actualToday);
 
-  const thisWeekStart = startOfWeekMonday_(referenceDate);
+  const thisWeekStart = startOfWeekSunday_(referenceDate);
   const thisWeekEnd = addDays_(thisWeekStart, 6);
   const nextWeekStart = addDays_(thisWeekStart, 7);
   const nextWeekEnd = addDays_(thisWeekStart, 13);
@@ -1918,7 +1918,7 @@ function getCalendarRange(request) {
     rangeStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     rangeEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
   } else {
-    rangeStart = startOfWeekMonday_(anchor);
+    rangeStart = startOfWeekSunday_(anchor);
     rangeEnd = addDays_(rangeStart, 6);
   }
 
@@ -2793,7 +2793,7 @@ function getEventMakerData(request) {
 
   const today = startOfDay_(new Date());
   const todayISO = formatISO_(today);
-  const thisWeekStart = startOfWeekMonday_(today);
+  const thisWeekStart = startOfWeekSunday_(today);
   const thisWeekEnd = addDays_(thisWeekStart, 6);
   const nextWeekStart = addDays_(thisWeekStart, 7);
   const nextWeekEnd = addDays_(thisWeekStart, 13);
@@ -4433,7 +4433,7 @@ function buildCalendarColumns_(viewMode, rangeStart, rangeEnd) {
   }
 
   if (viewMode === "MONTH") {
-    let cursor = startOfWeekMonday_(rangeStart);
+    let cursor = startOfWeekSunday_(rangeStart);
 
     while (cursor.getTime() <= rangeEnd.getTime()) {
       const rawEnd = addDays_(cursor, 6);
@@ -6349,6 +6349,13 @@ function startOfDay_(date) {
   return result;
 }
 
+function startOfWeekSunday_(date) {
+  const result = startOfDay_(date);
+  result.setDate(result.getDate() - result.getDay());
+  return result;
+}
+
+/** Dipakai HSE sync key (idempotensi per minggu kerja Senin). Bukan definisi minggu portal. */
 function startOfWeekMonday_(date) {
   const result = startOfDay_(date);
   const day = result.getDay();
